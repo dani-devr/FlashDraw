@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -5,226 +6,230 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+// Increase buffer size to handle high-quality canvas base64 images
+const io = new Server(server, { maxHttpBufferSize: 1e8 });
 
-// Serve the index.html file
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// The 50 Themes you requested
-const THEMES = [
-  "Cat", "Dog", "House", "Tree", "Car", "Bicycle", "Pizza", "Hamburger", "Ice Cream", 
-  "Cupcake", "Apple", "Banana", "Sun", "Moon", "Cloud", "Rainbow", "Flower", "Cactus", 
-  "Fish", "Bird", "Butterfly", "Frog", "Turtle", "Rabbit", "Panda", "Penguin", "Monkey", 
-  "Lion", "Shark", "Octopus", "Castle", "Rocket", "Airplane", "Boat", "Treasure Chest", 
-  "Pirate", "Robot", "Alien", "Ghost", "Wizard", "Knight", "Crown", "Sword", "Dragon", 
-  "Campfire", "Mountain", "Beach", "Lighthouse", "Snowman", "Hot Air Balloon"
-];
-
-// In-memory storage for rooms
+// Game State Storage
 const rooms = {};
 
-// Helper to generate a 6-digit code
+// Helper: Generate 6-char room code
 function generateCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
 }
 
+// 130 Random Themes
+const THEMES = [
+    "Cat", "Pirate Ship", "Dragon", "Castle", "Robot", "Banana", "Wizard", "Treasure Chest", "Alien", "Astronaut",
+    "Guitar", "Ninja", "Dinosaur", "Vampire", "Unicorn", "Mermaid", "Volcano", "Spaceship", "Zombie", "Ghost",
+    "Pizza", "Hamburger", "Sushi", "Octopus", "Monkey", "Elephant", "Tiger", "Lion", "Penguin", "Kangaroo",
+    "Hot Air Balloon", "Submarine", "Helicopter", "Train", "Motorcycle", "Bicycle", "Rollercoaster", "Ferris Wheel",
+    "Tornado", "Snowman", "Sandcastle", "Lighthouse", "Windmill", "Telescope", "Microscope", "Camera", "Smartphone",
+    "Laptop", "Headphones", "Microphone", "Crown", "Sword", "Shield", "Magic Wand", "Crystal Ball", "Book",
+    "Clock", "Watch", "Glasses", "Umbrella", "Key", "Lock", "Door", "Window", "Chair", "Table", "Bed", "Sofa",
+    "Lamp", "Television", "Radio", "Refrigerator", "Oven", "Toaster", "Blender", "Coffee Maker", "Teapot",
+    "Cup", "Plate", "Fork", "Knife", "Spoon", "Apple", "Orange", "Grapes", "Watermelon", "Strawberry", "Pineapple",
+    "Carrot", "Broccoli", "Tomato", "Potato", "Onion", "Garlic", "Mushroom", "Tree", "Flower", "Cactus",
+    "Rose", "Sunflower", "Tulip", "Daisy", "Leaf", "Cloud", "Sun", "Moon", "Star", "Planet", "Comet", "Meteor",
+    "Galaxy", "Black Hole", "Mountain", "River", "Lake", "Ocean", "Waterfall", "Island", "Desert", "Forest",
+    "Jungle", "Cave", "Bridge", "City", "Village", "Farm", "Barn", "Tractor", "Scarecrow", "Campfire", "Tent"
+];
+
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+    console.log('User connected:', socket.id);
 
-  // CREATE ROOM
-  socket.on('create_room', (data) => {
-    const roomCode = generateCode();
-    rooms[roomCode] = {
-      id: roomCode,
-      host: socket.id,
-      status: 'lobby', // lobby, drawing, voting, results
-      theme: '',
-      players: [{ id: socket.id, name: data.name, score: 0, drawing: null }],
-      votes: {}, // To track votes per drawing
-      currentDrawingIndex: 0,
-      endTime: 0
-    };
-    
-    socket.join(roomCode);
-    socket.emit('room_joined', { roomCode, isHost: true });
-    io.to(roomCode).emit('update_players', rooms[roomCode].players);
-  });
-
-  // JOIN ROOM
-  socket.on('join_room', (data) => {
-    const roomCode = data.roomCode.toUpperCase();
-    const room = rooms[roomCode];
-
-    if (!room) {
-      socket.emit('error_msg', 'Room not found!');
-      return;
-    }
-    if (room.status !== 'lobby') {
-      socket.emit('error_msg', 'Game is already in progress!');
-      return;
-    }
-
-    room.players.push({ id: socket.id, name: data.name, score: 0, drawing: null });
-    socket.join(roomCode);
-    socket.emit('room_joined', { roomCode, isHost: false });
-    io.to(roomCode).emit('update_players', room.players);
-  });
-
-  // START GAME
-  socket.on('start_game', (roomCode) => {
-    const room = rooms[roomCode];
-    if (room && room.host === socket.id) {
-      room.status = 'drawing';
-      room.theme = THEMES[Math.floor(Math.random() * THEMES.length)];
-      // 5 minutes = 300 seconds
-      room.endTime = Date.now() + (300 * 1000); 
-
-      // Reset previous game state if restarting
-      room.players.forEach(p => p.drawing = null);
-      
-      io.to(roomCode).emit('game_started', { theme: room.theme, endTime: room.endTime });
-
-      // Automatically end drawing phase after 5 mins if not triggered manually
-      room.gameTimer = setTimeout(() => {
-        if (rooms[roomCode] && rooms[roomCode].status === 'drawing') {
-          startVotingPhase(roomCode);
-        }
-      }, 300 * 1000);
-    }
-  });
-
-  // SUBMIT DRAWING
-  socket.on('submit_drawing', (data) => {
-    const room = rooms[data.roomCode];
-    if (room && room.status === 'drawing') {
-      const player = room.players.find(p => p.id === socket.id);
-      if (player) {
-        player.drawing = data.image;
-      }
-
-      // Check if all players have submitted
-      const allSubmitted = room.players.every(p => p.drawing !== null);
-      if (allSubmitted) {
-        clearTimeout(room.gameTimer); // Fix: clear the timer so it moves immediately
-        startVotingPhase(data.roomCode);
-      }
-    }
-  });
-
-  // VOTING LOGIC
-  function startVotingPhase(roomCode) {
-    const room = rooms[roomCode];
-    if (!room) return;
-    room.status = 'voting';
-    room.currentDrawingIndex = 0;
-    
-    // Filter out players who didn't submit a drawing
-    room.playersWithDrawings = room.players.filter(p => p.drawing !== null);
-    
-    if (room.playersWithDrawings.length === 0) {
-      room.status = 'results';
-      io.to(roomCode).emit('show_results', room.players);
-      return;
-    }
-
-    sendNextDrawing(roomCode);
-  }
-
-  function sendNextDrawing(roomCode) {
-    const room = rooms[roomCode];
-    if (!room) return;
-
-    if (room.currentDrawingIndex >= room.playersWithDrawings.length) {
-      // Voting finished
-      tallyScores(roomCode);
-      room.status = 'results';
-      io.to(roomCode).emit('show_results', room.players);
-      return;
-    }
-
-    const currentArt = room.playersWithDrawings[room.currentDrawingIndex];
-    io.to(roomCode).emit('show_drawing_vote', {
-      artistId: currentArt.id,
-      artistName: currentArt.name,
-      drawing: currentArt.drawing,
-      index: room.currentDrawingIndex + 1,
-      total: room.playersWithDrawings.length
-    });
-
-    // Automatically move to next drawing after 15 seconds
-    room.voteTimer = setTimeout(() => {
-      room.currentDrawingIndex++;
-      sendNextDrawing(roomCode);
-    }, 15000);
-  }
-
-  // SUBMIT VOTE
-  socket.on('submit_vote', (data) => {
-    const room = rooms[data.roomCode];
-    if (room && room.status === 'voting') {
-      const currentArt = room.playersWithDrawings[room.currentDrawingIndex];
-      // Prevent self-voting
-      if (socket.id !== currentArt.id) {
-        if (!room.votes[currentArt.id]) room.votes[currentArt.id] = [];
-        room.votes[currentArt.id].push(data.stars);
-      }
-    }
-  });
-
-  function tallyScores(roomCode) {
-    const room = rooms[roomCode];
-    room.players.forEach(p => {
-      const playerVotes = room.votes[p.id] || [];
-      const totalStars = playerVotes.reduce((a, b) => a + b, 0);
-      p.score = totalStars;
-    });
-    // Sort players by score
-    room.players.sort((a, b) => b.score - a.score);
-  }
-
-  // RETURN TO LOBBY
-  socket.on('return_to_lobby', (roomCode) => {
-    const room = rooms[roomCode];
-    if (room && room.host === socket.id) {
-      room.status = 'lobby';
-      room.votes = {};
-      room.players.forEach(p => { p.drawing = null; p.score = 0; });
-      io.to(roomCode).emit('returned_to_lobby');
-      io.to(roomCode).emit('update_players', room.players);
-    }
-  });
-
-  // DISCONNECT
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    for (const roomCode in rooms) {
-      const room = rooms[roomCode];
-      const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      
-      if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
+    // Create a new lobby
+    socket.on('create_room', (data) => {
+        const roomCode = generateCode();
+        rooms[roomCode] = {
+            code: roomCode,
+            owner: socket.id,
+            status: 'lobby', // lobby, playing, voting, results
+            settings: { roundTime: 5, maxPlayers: 8, voteTime: 15 },
+            players: {},
+            theme: '',
+            drawings: {},
+            votes: {},
+            currentVoteIndex: 0,
+            drawingOrder: []
+        };
         
-        // If room is empty, delete it
-        if (room.players.length === 0) {
-          delete rooms[roomCode];
+        joinRoom(socket, roomCode, data.name);
+    });
+
+    // Join existing lobby
+    socket.on('join_room', (data) => {
+        const code = data.code.toUpperCase();
+        if (rooms[code]) {
+            if(Object.keys(rooms[code].players).length >= rooms[code].settings.maxPlayers) {
+                return socket.emit('error_msg', 'Room is full!');
+            }
+            if(rooms[code].status !== 'lobby') {
+                return socket.emit('error_msg', 'Game already in progress!');
+            }
+            joinRoom(socket, code, data.name);
         } else {
-          // If host left, assign new host
-          if (room.host === socket.id) {
-            room.host = room.players[0].id;
-            io.to(room.host).emit('you_are_host');
-          }
-          io.to(roomCode).emit('update_players', room.players);
+            socket.emit('error_msg', 'Room not found!');
         }
-      }
+    });
+
+    function joinRoom(socket, code, name) {
+        socket.join(code);
+        rooms[code].players[socket.id] = { id: socket.id, name, ready: false, score: 0 };
+        socket.emit('room_joined', { code, isOwner: rooms[code].owner === socket.id, settings: rooms[code].settings });
+        io.to(code).emit('update_players', Object.values(rooms[code].players));
+        io.to(code).emit('chat_msg', { sender: 'System', text: `${name} joined the lobby.`, sys: true });
     }
-  });
+
+    // Lobby Interactions
+    socket.on('toggle_ready', (code) => {
+        if(rooms[code] && rooms[code].players[socket.id]) {
+            rooms[code].players[socket.id].ready = !rooms[code].players[socket.id].ready;
+            io.to(code).emit('update_players', Object.values(rooms[code].players));
+        }
+    });
+
+    socket.on('update_settings', (data) => {
+        if(rooms[data.code] && rooms[data.code].owner === socket.id) {
+            rooms[data.code].settings = data.settings;
+            io.to(data.code).emit('settings_updated', data.settings);
+        }
+    });
+
+    socket.on('chat_msg', (data) => {
+        if(rooms[data.code]) {
+            const name = rooms[data.code].players[socket.id]?.name || 'Spectator';
+            io.to(data.code).emit('chat_msg', { sender: name, text: data.msg });
+        }
+    });
+
+    // Game Loop
+    socket.on('start_game', (code) => {
+        const room = rooms[code];
+        if(room && room.owner === socket.id) {
+            room.status = 'playing';
+            room.theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+            room.drawings = {};
+            room.votes = {};
+            Object.values(room.players).forEach(p => p.score = 0);
+            io.to(code).emit('game_started', { theme: room.theme, time: room.settings.roundTime * 60 });
+        }
+    });
+
+    // Receive drawings when time is up
+    socket.on('submit_drawing', (data) => {
+        const room = rooms[data.code];
+        if(room && room.status === 'playing') {
+            room.drawings[socket.id] = data.image;
+            
+            // If everyone submitted
+            if(Object.keys(room.drawings).length === Object.keys(room.players).length) {
+                startVotingPhase(data.code);
+            }
+        }
+    });
+
+    function startVotingPhase(code) {
+        const room = rooms[code];
+        room.status = 'voting';
+        room.drawingOrder = Object.keys(room.drawings);
+        room.currentVoteIndex = 0;
+        
+        // Initialize scores
+        room.drawingOrder.forEach(id => room.votes[id] = 0);
+        
+        sendNextVote(code);
+    }
+
+    function sendNextVote(code) {
+        const room = rooms[code];
+        if(room.currentVoteIndex >= room.drawingOrder.length) {
+            return showResults(code);
+        }
+
+        const currentAuthorId = room.drawingOrder[room.currentVoteIndex];
+        io.to(code).emit('start_vote', {
+            authorId: currentAuthorId,
+            image: room.drawings[currentAuthorId],
+            time: room.settings.voteTime
+        });
+
+        // Auto advance vote if time runs out
+        room.voteTimer = setTimeout(() => {
+            room.currentVoteIndex++;
+            sendNextVote(code);
+        }, room.settings.voteTime * 1000 + 2000);
+    }
+
+    socket.on('submit_vote', (data) => {
+        const room = rooms[data.code];
+        if(room && room.status === 'voting') {
+            // Cannot vote for self
+            if(data.authorId !== socket.id) {
+                room.votes[data.authorId] += data.stars;
+            }
+        }
+    });
+
+    function showResults(code) {
+        const room = rooms[code];
+        room.status = 'results';
+        
+        // Apply scores
+        Object.keys(room.votes).forEach(id => {
+            if(room.players[id]) room.players[id].score = room.votes[id];
+        });
+
+        const sortedPlayers = Object.values(room.players).sort((a, b) => b.score - a.score);
+        
+        // Map top 3 with images
+        const top3 = sortedPlayers.slice(0, 3).map(p => ({
+            name: p.name,
+            score: p.score,
+            image: room.drawings[p.id]
+        }));
+
+        io.to(code).emit('show_results', top3);
+
+        // Reset to lobby after 15 seconds
+        setTimeout(() => {
+            if(rooms[code]) {
+                rooms[code].status = 'lobby';
+                Object.values(rooms[code].players).forEach(p => p.ready = false);
+                io.to(code).emit('return_to_lobby');
+            }
+        }, 15000);
+    }
+
+    socket.on('disconnect', () => {
+        // Handle player leaving
+        for (const code in rooms) {
+            if (rooms[code].players[socket.id]) {
+                const name = rooms[code].players[socket.id].name;
+                delete rooms[code].players[socket.id];
+                io.to(code).emit('chat_msg', { sender: 'System', text: `${name} disconnected.`, sys: true });
+                io.to(code).emit('update_players', Object.values(rooms[code].players));
+                
+                // If room empty, delete it
+                if(Object.keys(rooms[code].players).length === 0) {
+                    delete rooms[code];
+                } else if (rooms[code].owner === socket.id) {
+                    // Assign new owner
+                    rooms[code].owner = Object.keys(rooms[code].players)[0];
+                    io.to(code).emit('new_owner', rooms[code].owner);
+                }
+            }
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+    console.log(`Flash Draw! Server running on port ${PORT}`);
 });

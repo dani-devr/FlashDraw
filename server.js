@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -81,8 +80,10 @@ io.on('connection', (socket) => {
 
     function joinRoom(socket, code, name) {
         socket.join(code);
-        rooms[code].players[socket.id] = { id: socket.id, name, ready: false, score: 0 };
-        socket.emit('room_joined', { code, isOwner: rooms[code].owner === socket.id, settings: rooms[code].settings });
+        const isOwner = rooms[code].owner === socket.id;
+        // The owner is automatically set to ready: true so they aren't blocking the start
+        rooms[code].players[socket.id] = { id: socket.id, name, ready: isOwner, score: 0 };
+        socket.emit('room_joined', { code, isOwner, settings: rooms[code].settings });
         io.to(code).emit('update_players', Object.values(rooms[code].players));
         io.to(code).emit('chat_msg', { sender: 'System', text: `${name} joined the lobby.`, sys: true });
     }
@@ -201,8 +202,12 @@ io.on('connection', (socket) => {
         setTimeout(() => {
             if(rooms[code]) {
                 rooms[code].status = 'lobby';
-                Object.values(rooms[code].players).forEach(p => p.ready = false);
+                // Reset everyone's ready status, except for the host
+                Object.values(rooms[code].players).forEach(p => {
+                    p.ready = (p.id === rooms[code].owner);
+                });
                 io.to(code).emit('return_to_lobby');
+                io.to(code).emit('update_players', Object.values(rooms[code].players));
             }
         }, 15000);
     }
@@ -214,15 +219,19 @@ io.on('connection', (socket) => {
                 const name = rooms[code].players[socket.id].name;
                 delete rooms[code].players[socket.id];
                 io.to(code).emit('chat_msg', { sender: 'System', text: `${name} disconnected.`, sys: true });
-                io.to(code).emit('update_players', Object.values(rooms[code].players));
                 
                 // If room empty, delete it
                 if(Object.keys(rooms[code].players).length === 0) {
                     delete rooms[code];
-                } else if (rooms[code].owner === socket.id) {
-                    // Assign new owner
-                    rooms[code].owner = Object.keys(rooms[code].players)[0];
-                    io.to(code).emit('new_owner', rooms[code].owner);
+                } else {
+                    // Assign new owner if the host disconnected
+                    if (rooms[code].owner === socket.id) {
+                        rooms[code].owner = Object.keys(rooms[code].players)[0];
+                        rooms[code].players[rooms[code].owner].ready = true; // Automatically ready up the new host
+                        io.to(code).emit('new_owner', rooms[code].owner);
+                    }
+                    // Update remaining players
+                    io.to(code).emit('update_players', Object.values(rooms[code].players));
                 }
             }
         }

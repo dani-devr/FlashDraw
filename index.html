@@ -3,304 +3,314 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flash Draw!</title>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+    <title>Flash Draw! - Multiplayer Drawing</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Socket.IO & Confetti -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root {
-            --bg-color: #0b132b;
-            --panel-bg: #1c2541;
-            --panel-bg-hover: #3a506b;
-            --border-color: #3a506b;
-            --text-main: #ffffff;
-            --text-muted: #8d99ae;
-            --primary: #3a86ff;
-            --primary-hover: #00509d;
-            --accent: #ff006e;
-            --success: #06d6a0;
-            --danger: #ef233c;
-            --warning: #ffd166;
+            --bg: #0f111a;
+            --surface: rgba(255, 255, 255, 0.05);
+            --surface-hover: rgba(255, 255, 255, 0.1);
+            --border: rgba(255, 255, 255, 0.1);
+            --primary: #7C3AED;
+            --primary-hover: #6D28D9;
+            --accent: #F472B6;
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+            --danger: #EF4444;
+            --success: #10B981;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Nunito', sans-serif; user-select: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; user-select: none; }
+        body { background-color: var(--bg); color: var(--text); overflow: hidden; height: 100vh; width: 100vw; display: flex; flex-direction: column; }
         
-        body { 
-            background-color: var(--bg-color); color: var(--text-main); 
-            overflow: hidden; height: 100vh; width: 100vw; display: flex; flex-direction: column; 
-        }
-
-        /* UI Elements */
-        h1, h2, h3 { text-transform: uppercase; letter-spacing: 1px; font-weight: 900; }
-        
-        .btn { 
-            background: var(--primary); color: white; border: none; padding: 14px 24px; border-radius: 12px; 
-            font-size: 1.2rem; font-weight: 900; cursor: pointer; text-transform: uppercase;
-            box-shadow: 0 6px 0 var(--primary-hover); transition: 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
-        }
-        .btn:active { box-shadow: 0 0px 0 var(--primary-hover); transform: translateY(6px); }
-        .btn.green { background: var(--success); box-shadow: 0 6px 0 #04a077; }
-        .btn.red { background: var(--danger); box-shadow: 0 6px 0 #ba1826; }
-        
-        .input { 
-            background: var(--bg-color); color: var(--text-main); border: 3px solid var(--border-color); 
-            padding: 14px; border-radius: 12px; font-size: 1.2rem; font-weight: 800; outline: none; width: 100%; text-align: center; transition: 0.2s;
-        }
+        /* Glassmorphism Classes */
+        .glass { background: var(--surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+        .btn { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4); }
+        .btn.secondary { background: var(--surface); border: 1px solid var(--border); }
+        .btn.secondary:hover { background: var(--surface-hover); }
+        .btn.danger { background: var(--danger); }
+        .input { background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; padding: 12px 16px; border-radius: 12px; font-size: 1rem; outline: none; transition: border 0.2s; width: 100%; }
         .input:focus { border-color: var(--primary); }
-
-        .panel { 
-            background: var(--panel-bg); border: 3px solid var(--border-color); border-radius: 20px; 
-            padding: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-        }
-
-        .view { display: none; height: 100%; width: 100%; position: absolute; top: 0; left: 0; flex-direction: column; align-items: center; justify-content: center;}
-        .view.active { display: flex; animation: fadeIn 0.3s forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-
-        /* --- MENUS --- */
-        .logo { font-size: 5rem; color: var(--text-main); text-shadow: 0 6px 0 var(--primary), 0 12px 25px rgba(0,0,0,0.5); margin-bottom: 30px; text-align: center; }
-        .center-box { max-width: 500px; width: 90%; text-align: center; }
         
-        .lobby-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; max-width: 1000px; width: 95%; height: 75vh; }
-        .player-list { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 50vh; margin-top: 15px;}
-        .player-card { background: var(--panel-bg-hover); padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 1.2rem; border-left: 6px solid var(--danger); }
-        .player-card.ready { border-left-color: var(--success); }
+        /* Layouts */
+        .view { display: none; height: 100%; width: 100%; position: absolute; top: 0; left: 0; }
+        .view.active { display: flex; flex-direction: column; animation: fadeIn 0.4s ease forwards; }
 
-        .setting-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-color); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 800;}
-        .setting-row input[type=range] { width: 130px; accent-color: var(--primary); }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        
+        /* --- LOGIN & LOBBY VIEWS --- */
+        .center-container { margin: auto; max-width: 500px; width: 90%; padding: 40px; text-align: center; }
+        .logo { font-size: 3rem; font-weight: 800; background: linear-gradient(to right, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 30px; letter-spacing: -1px; }
+        .flex-col { display: flex; flex-direction: column; gap: 15px; }
+        .flex-row { display: flex; gap: 15px; }
 
-        /* --- DRAWING UI (Advanced & Visible) --- */
-        #view-draw { display: none; grid-template-columns: 90px 1fr 280px; grid-template-rows: 70px 1fr; height: 100vh; background: var(--bg-color); }
+        /* Lobby specific */
+        .lobby-layout { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; height: 100%; padding: 20px; }
+        .panel { display: flex; flex-direction: column; padding: 20px; }
+        .panel h2 { font-size: 1.2rem; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .player-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .player-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        .player-card .status { height: 10px; width: 10px; border-radius: 50%; background: var(--danger); }
+        .player-card .status.ready { background: var(--success); }
+        .setting-group { margin-bottom: 15px; text-align: left; }
+        .setting-group label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-muted); }
+        .setting-group input[type=range] { width: 100%; accent-color: var(--primary); }
+
+        /* Chat System */
+        .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 0.9rem; }
+        .chat-msg { padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.2); align-self: flex-start; max-width: 90%; word-wrap: break-word;}
+        .chat-msg.sys { background: none; color: var(--text-muted); font-style: italic; }
+        .chat-msg b { color: var(--accent); }
+        .chat-input { display: flex; gap: 10px; }
+        
+        /* --- DRAWING VIEW --- */
+        #view-draw { display: none; grid-template-columns: 70px 1fr 250px; grid-template-rows: 60px 1fr; height: 100vh; background: #1a1c23; }
         #view-draw.active { display: grid; }
         
-        /* Top Bar */
-        .top-bar { grid-column: 1 / 4; grid-row: 1; background: var(--panel-bg); border-bottom: 3px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 50; }
-        .theme-display { font-size: 2rem; font-weight: 900; color: var(--warning); text-shadow: 0 3px 0 rgba(0,0,0,0.5); letter-spacing: 2px;}
-        .timer { font-size: 2rem; font-weight: 900; background: var(--bg-color); padding: 5px 20px; border-radius: 12px; border: 2px solid var(--border-color); }
-
-        /* Left Toolbar */
-        .toolbar-left { grid-column: 1; grid-row: 2; background: var(--panel-bg); border-right: 3px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 15px 0; gap: 10px; z-index: 40; overflow-y: auto;}
-        .tool-btn { width: 60px; height: 60px; border-radius: 15px; border: 3px solid transparent; background: var(--panel-bg-hover); color: var(--text-main); font-size: 1.5rem; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; position: relative;}
-        .tool-btn:hover { background: var(--primary); }
-        .tool-btn.active { background: var(--primary); border-color: white; box-shadow: 0 0 15px rgba(58, 134, 255, 0.6); }
-        .shortcut { position: absolute; bottom: 2px; right: 4px; font-size: 0.7rem; font-weight: 900; opacity: 0.7; }
-        .tool-divider { height: 3px; width: 60%; background: var(--border-color); margin: 5px 0; }
-
-        /* Canvas Workspace (Pan/Zoom supported) */
-        .canvas-area { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; background: #070b19; cursor: crosshair; }
-        #workspace { position: absolute; transform-origin: 0 0; background: white; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        .top-bar { grid-column: 1 / 4; grid-row: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; border-bottom: 1px solid var(--border); }
+        .theme-display { font-size: 1.5rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 10px rgba(244, 114, 182, 0.4); }
+        .timer { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+        
+        .toolbar-left { grid-column: 1; grid-row: 2; border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 15px 0; gap: 10px; z-index: 10; overflow-y: auto;}
+        .tool-btn { width: 45px; height: 45px; border-radius: 12px; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; }
+        .tool-btn:hover { background: var(--surface); color: white; }
+        .tool-btn.active { background: var(--primary); color: white; box-shadow: 0 0 15px rgba(124, 58, 237, 0.5); }
+        
+        .canvas-container { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; background: #2a2d38; cursor: crosshair; }
+        /* The infinite workspace wrapper */
+        #workspace { position: absolute; transform-origin: 0 0; box-shadow: 0 0 30px rgba(0,0,0,0.5); background: white; }
         canvas { position: absolute; top: 0; left: 0; }
         
-        #done-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(11, 19, 43, 0.9); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-
-        /* Right Panel (Properties & Layers) */
-        .toolbar-right { grid-column: 3; grid-row: 2; background: var(--panel-bg); border-left: 3px solid var(--border-color); display: flex; flex-direction: column; z-index: 40; }
+        .toolbar-right { grid-column: 3; grid-row: 2; border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
         
-        .prop-section { padding: 20px; border-bottom: 3px solid var(--border-color); }
-        .prop-section h3 { margin-bottom: 15px; font-size: 1rem; color: var(--text-muted); }
-        .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-        .slider-row input[type=range] { flex: 1; accent-color: var(--primary); height: 8px; }
-        .slider-val { background: var(--bg-color); padding: 4px 8px; border-radius: 6px; font-weight: 800; min-width: 45px; text-align: center; }
-        
-        .color-picker-row { display: flex; gap: 10px; margin-bottom: 15px; }
-        input[type="color"] { -webkit-appearance: none; border: 3px solid var(--border-color); width: 50px; height: 50px; border-radius: 12px; cursor: pointer; background: none; }
+        .properties-panel { padding: 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+        .prop-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        .prop-row input[type=range] { flex: 1; accent-color: var(--primary); }
+        .color-picker-wrap { display: flex; gap: 10px; align-items: center; margin-top: 5px; }
+        input[type="color"] { -webkit-appearance: none; border: none; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; background: none; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid var(--border); border-radius: 8px; }
+        .palette { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+        .swatch { width: 25px; height: 25px; border-radius: 5px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); }
         
-        .palette-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-        .swatch { aspect-ratio: 1; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.1s; }
-        .swatch:hover, .swatch.active { border-color: white; transform: scale(1.1); }
+        .layers-panel { flex: 1; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        .layer-item { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; }
+        .layer-item.active { border-color: var(--primary); background: rgba(124, 58, 237, 0.1); }
+        .layer-item i { color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+        .layer-item i:hover { color: white; }
 
-        .layers-section { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .layer-card { background: var(--bg-color); border: 2px solid var(--border-color); padding: 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .layer-card.active { border-color: var(--primary); background: rgba(58, 134, 255, 0.2); }
-        .layer-card i { cursor: pointer; color: var(--text-muted); transition: 0.2s; }
-        .layer-card i:hover { color: white; }
+        /* Text Tool Overlay */
+        #text-input-overlay { position: absolute; display: none; background: transparent; border: 1px dashed var(--primary); color: white; font-family: 'Poppins'; outline: none; z-index: 100; min-width: 100px; padding: 5px; }
 
-        /* --- VOTING & RESULTS --- */
-        .vote-img-box { background: white; padding: 15px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin: 30px 0; max-width: 900px; width: 90%; }
-        .vote-img { width: 100%; border-radius: 10px; object-fit: contain; max-height: 60vh; }
+        /* Overlay text */
+        .overlay-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 5rem; font-weight: 800; background: rgba(0,0,0,0.8); z-index: 1000; opacity: 0; pointer-events: none; transition: 0.3s; }
+
+        /* --- VOTING VIEW --- */
+        .voting-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; }
+        .art-display { max-width: 80vw; max-height: 60vh; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); object-fit: contain; background: white; margin-bottom: 30px; border: 4px solid var(--surface); }
         .stars { display: flex; gap: 15px; }
-        .star-btn { font-size: 5rem; color: var(--panel-bg-hover); background: none; border: none; cursor: pointer; transition: 0.2s; text-shadow: 0 5px 0 rgba(0,0,0,0.3); }
-        .star-btn:hover, .star-btn.active { color: var(--warning); transform: scale(1.1); }
+        .star-btn { font-size: 3rem; background: transparent; border: none; color: var(--surface); cursor: pointer; transition: 0.2s; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .star-btn:hover, .star-btn.active { color: #FBBF24; transform: scale(1.2); }
+        
+        /* --- RESULTS VIEW --- */
+        .podium-container { display: flex; align-items: flex-end; justify-content: center; gap: 20px; height: 60vh; margin-top: 50px; }
+        .podium-place { display: flex; flex-direction: column; align-items: center; width: 200px; }
+        .podium-art { width: 150px; height: 150px; object-fit: cover; border-radius: 12px; border: 4px solid white; margin-bottom: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .podium-step { width: 100%; border-radius: 12px 12px 0 0; display: flex; justify-content: center; padding-top: 20px; font-size: 2rem; font-weight: 800; color: white; text-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .place-1 .podium-step { height: 250px; background: linear-gradient(to top, #FBBF24, #F59E0B); }
+        .place-2 .podium-step { height: 180px; background: linear-gradient(to top, #94A3B8, #CBD5E1); }
+        .place-3 .podium-step { height: 120px; background: linear-gradient(to top, #B45309, #D97706); }
 
-        .podium { display: flex; align-items: flex-end; justify-content: center; gap: 20px; height: 50vh; margin-top: 40px; }
-        .podium-place { display: flex; flex-direction: column; align-items: center; width: 250px; }
-        .podium-art { width: 100%; aspect-ratio: 4/3; object-fit: cover; border: 6px solid white; border-radius: 15px; margin-bottom: -15px; z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,0.6); background: white;}
-        .podium-step { width: 100%; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; align-items: center; padding-top: 30px; color: var(--bg-color); font-weight: 900; font-size: 2.5rem; }
-        .place-1 .podium-step { height: 280px; background: var(--warning); }
-        .place-2 .podium-step { height: 200px; background: #ced4da; }
-        .place-3 .podium-step { height: 140px; background: #e29578; }
+        /* Minimap */
+        #minimap-container { position: absolute; bottom: 20px; right: 20px; width: 150px; height: 100px; background: rgba(0,0,0,0.5); border: 2px solid var(--border); border-radius: 8px; z-index: 50; overflow: hidden;}
+        #minimap-canvas { width: 100%; height: 100%; }
+        #minimap-viewport { position: absolute; border: 2px solid var(--primary); box-shadow: 0 0 0 999px rgba(0,0,0,0.3); pointer-events: none; }
     </style>
 </head>
 <body>
 
     <!-- 1. LOGIN SCREEN -->
     <div id="view-login" class="view active">
-        <h1 class="logo"><i class="fa-solid fa-paintbrush"></i> FLASH DRAW!</h1>
-        <div class="panel center-box">
-            <h2>ENTER NICKNAME</h2>
-            <input type="text" id="player-name" class="input" placeholder="Your Name" maxlength="12" style="margin: 20px 0;">
-            <button class="btn green" onclick="Game.createRoom()" style="margin-bottom: 15px;"><i class="fa-solid fa-plus"></i> CREATE LOBBY</button>
-            <div style="display:flex; gap:10px;">
-                <input type="text" id="room-code-input" class="input" placeholder="CODE" maxlength="6" style="text-transform: uppercase;">
-                <button class="btn" onclick="Game.joinRoom()"><i class="fa-solid fa-arrow-right"></i> JOIN</button>
+        <div class="glass center-container">
+            <h1 class="logo"><i class="fa-solid fa-paintbrush"></i> Flash Draw!</h1>
+            <p style="margin-bottom: 20px; color: var(--text-muted);">Enter your name to begin.</p>
+            <div class="flex-col">
+                <input type="text" id="player-name" class="input" placeholder="Nickname" maxlength="12">
+                <div class="flex-row">
+                    <button class="btn" style="flex:1" onclick="Game.createRoom()"><i class="fa-solid fa-plus"></i> Create Lobby</button>
+                    <button class="btn secondary" style="flex:1" onclick="Game.showJoin()"><i class="fa-solid fa-right-to-bracket"></i> Join Room</button>
+                </div>
+                <div id="join-section" style="display:none; margin-top: 10px;" class="flex-col">
+                    <input type="text" id="room-code-input" class="input" placeholder="6-Letter Room Code" maxlength="6" style="text-transform: uppercase;">
+                    <button class="btn" onclick="Game.joinRoom()">Join</button>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- 2. LOBBY SCREEN -->
     <div id="view-lobby" class="view">
-        <h1 class="logo" style="font-size: 3.5rem; margin-bottom: 15px;">ROOM: <span id="lobby-code" style="color:var(--success)"></span></h1>
-        <div class="lobby-grid">
-            <div class="panel" style="display:flex; flex-direction:column;">
-                <h2><i class="fa-solid fa-gear"></i> SETTINGS</h2>
-                <div id="settings-area" style="margin-top:20px; opacity:0.5; pointer-events:none;">
-                    <div class="setting-row">
-                        <span>Time (<span id="lbl-time">3</span>m)</span>
-                        <input type="range" id="set-time" min="1" max="10" value="3" onchange="Game.updateSettings()">
+        <div class="lobby-layout">
+            <!-- Left: Settings -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-gear"></i> Settings</h2>
+                <div id="lobby-settings" style="pointer-events: none; opacity: 0.7;">
+                    <div class="setting-group">
+                        <label>Round Duration (<span id="lbl-time">5</span>m)</label>
+                        <input type="range" id="set-time" min="1" max="10" value="5" onchange="Game.updateSettings()">
                     </div>
-                    <div class="setting-row">
-                        <span>Players (<span id="lbl-players">8</span>)</span>
+                    <div class="setting-group">
+                        <label>Max Players (<span id="lbl-players">8</span>)</label>
                         <input type="range" id="set-players" min="2" max="16" value="8" onchange="Game.updateSettings()">
                     </div>
+                    <div class="setting-group">
+                        <label>Voting Time (<span id="lbl-vote">15</span>s)</label>
+                        <input type="range" id="set-vote" min="5" max="30" value="15" onchange="Game.updateSettings()">
+                    </div>
                 </div>
+                <p id="owner-notice" style="font-size:0.8rem; color:var(--accent); margin-top:10px; display:none;">You are the room owner.</p>
             </div>
-            <div class="panel" style="display:flex; flex-direction:column;">
-                <h2><i class="fa-solid fa-users"></i> PLAYERS</h2>
-                <div class="player-list" id="player-list"></div>
-                <div style="margin-top:auto; padding-top:20px; display:flex; gap:15px;">
-                    <button class="btn green" id="btn-ready" onclick="Game.toggleReady()">READY UP</button>
-                    <button class="btn red" id="btn-start" onclick="Game.startGame()" style="display:none;">START MATCH</button>
+
+            <!-- Middle: Players -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-users"></i> Lobby: <span id="lobby-code-display" style="color:var(--primary); letter-spacing: 2px;"></span></h2>
+                <div class="player-list" id="lobby-players"></div>
+                <button class="btn" id="btn-ready" onclick="Game.toggleReady()" style="margin-top:15px; width:100%;">Ready Up</button>
+                <button class="btn danger" id="btn-start" onclick="Game.startGame()" style="margin-top:10px; width:100%; display:none;">Start Match</button>
+            </div>
+
+            <!-- Right: Chat -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-comments"></i> Chat</h2>
+                <div class="chat-box" id="lobby-chat"></div>
+                <div class="chat-input">
+                    <input type="text" id="lobby-chat-input" class="input" placeholder="Type here..." onkeypress="if(event.key==='Enter') Game.sendChat()">
+                    <button class="btn" onclick="Game.sendChat()"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 3. DRAWING SCREEN (ADVANCED) -->
+    <!-- 3. DRAWING SCREEN -->
     <div id="view-draw" class="view">
-        <div class="top-bar">
-            <div class="timer" id="game-timer">00:00</div>
+        <div class="top-bar glass" style="border-radius: 0;">
+            <div class="timer" id="game-timer">05:00</div>
             <div class="theme-display" id="game-theme">THEME</div>
-            <button class="btn green" id="btn-done" style="width: auto;" onclick="Game.submitEarly()">
-                <i class="fa-solid fa-check"></i> DONE!
-            </button>
+            <button class="btn secondary" onclick="DrawEngine.clearCanvas()"><i class="fa-solid fa-trash"></i></button>
         </div>
-
-        <div class="toolbar-left">
-            <button class="tool-btn active" title="Pencil (B)" onclick="DrawEngine.setTool('pencil')" id="tool-pencil">
-                <i class="fa-solid fa-pencil"></i><span class="shortcut">B</span>
-            </button>
-            <button class="tool-btn" title="Marker" onclick="DrawEngine.setTool('marker')" id="tool-marker">
-                <i class="fa-solid fa-highlighter"></i>
-            </button>
-            <button class="tool-btn" title="Airbrush" onclick="DrawEngine.setTool('airbrush')" id="tool-airbrush">
-                <i class="fa-solid fa-spray-can"></i>
-            </button>
-            <button class="tool-btn" title="Eraser (E)" onclick="DrawEngine.setTool('eraser')" id="tool-eraser">
-                <i class="fa-solid fa-eraser"></i><span class="shortcut">E</span>
-            </button>
-            <button class="tool-btn" title="Fill (G)" onclick="DrawEngine.setTool('fill')" id="tool-fill">
-                <i class="fa-solid fa-fill-drip"></i><span class="shortcut">G</span>
-            </button>
-            
-            <div class="tool-divider"></div>
-            
-            <button class="tool-btn" title="Line (L)" onclick="DrawEngine.setTool('line')" id="tool-line">
-                <i class="fa-solid fa-minus"></i><span class="shortcut">L</span>
-            </button>
-            <button class="tool-btn" title="Rectangle (R)" onclick="DrawEngine.setTool('rect')" id="tool-rect">
-                <i class="fa-regular fa-square"></i><span class="shortcut">R</span>
-            </button>
-            <button class="tool-btn" title="Circle (C)" onclick="DrawEngine.setTool('circle')" id="tool-circle">
-                <i class="fa-regular fa-circle"></i><span class="shortcut">C</span>
-            </button>
-            
-            <div class="tool-divider"></div>
-            
-            <button class="tool-btn" title="Pan (Space)" onclick="DrawEngine.setTool('pan')" id="tool-pan">
-                <i class="fa-solid fa-hand"></i><span class="shortcut">✋</span>
-            </button>
-            <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="DrawEngine.undo()">
-                <i class="fa-solid fa-rotate-left"></i><span class="shortcut">Z</span>
-            </button>
-            <button class="tool-btn" title="Clear Canvas" onclick="DrawEngine.clearCanvas()" style="background:var(--danger); margin-top:auto;">
-                <i class="fa-solid fa-trash"></i>
-            </button>
+        
+        <!-- Tools -->
+        <div class="toolbar-left glass" style="border-radius: 0;">
+            <button class="tool-btn active" title="Pencil (B)" onclick="DrawEngine.setTool('pencil')"><i class="fa-solid fa-pencil"></i></button>
+            <button class="tool-btn" title="Marker" onclick="DrawEngine.setTool('marker')"><i class="fa-solid fa-highlighter"></i></button>
+            <button class="tool-btn" title="Airbrush" onclick="DrawEngine.setTool('airbrush')"><i class="fa-solid fa-spray-can"></i></button>
+            <button class="tool-btn" title="Eraser (E)" onclick="DrawEngine.setTool('eraser')"><i class="fa-solid fa-eraser"></i></button>
+            <button class="tool-btn" title="Fill (G)" onclick="DrawEngine.setTool('fill')"><i class="fa-solid fa-fill-drip"></i></button>
+            <div style="height:1px; width:60%; background:var(--border); margin:10px 0;"></div>
+            <button class="tool-btn" title="Line (L)" onclick="DrawEngine.setTool('line')"><i class="fa-solid fa-minus"></i></button>
+            <button class="tool-btn" title="Rectangle (R)" onclick="DrawEngine.setTool('rect')"><i class="fa-solid fa-vector-square"></i></button>
+            <button class="tool-btn" title="Circle (C)" onclick="DrawEngine.setTool('circle')"><i class="fa-regular fa-circle"></i></button>
+            <div style="height:1px; width:60%; background:var(--border); margin:10px 0;"></div>
+            <button class="tool-btn" title="Text (T)" onclick="DrawEngine.setTool('text')"><i class="fa-solid fa-font"></i></button>
+            <button class="tool-btn" title="Select/Move" onclick="DrawEngine.setTool('select')"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+            <button class="tool-btn" title="Pan (Space)" onclick="DrawEngine.setTool('pan')"><i class="fa-solid fa-hand"></i></button>
+            <div style="flex:1;"></div>
+            <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="DrawEngine.undo()"><i class="fa-solid fa-rotate-left"></i></button>
+            <button class="tool-btn" title="Redo (Ctrl+Y)" onclick="DrawEngine.redo()"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
-
-        <div class="canvas-area" id="canvas-wrap">
+        
+        <!-- Canvas Area -->
+        <div class="canvas-container" id="canvas-wrap">
             <div id="workspace"></div>
-            
-            <div id="done-overlay">
-                <i class="fa-solid fa-circle-check" style="font-size: 6rem; color: var(--success); margin-bottom: 20px;"></i>
-                <h1>SUBMITTED!</h1>
-                <h2 style="color:var(--text-muted); margin-top:10px;">Waiting for other players...</h2>
+            <div id="minimap-container">
+                <canvas id="minimap-canvas"></canvas>
+                <div id="minimap-viewport"></div>
             </div>
+            <!-- Dynamic text input -->
+            <input type="text" id="text-input-overlay" placeholder="Type here...">
         </div>
-
-        <div class="toolbar-right">
-            <div class="prop-section">
-                <h3>BRUSH SETTINGS</h3>
-                <div class="slider-row">
+        
+        <!-- Properties & Layers -->
+        <div class="toolbar-right glass" style="border-radius: 0;">
+            <div class="properties-panel">
+                <div class="prop-row">
                     <i class="fa-solid fa-circle" style="font-size:0.8rem"></i>
-                    <input type="range" id="prop-size" min="1" max="150" value="8" oninput="DrawEngine.updateProps()">
-                    <div class="slider-val" id="val-size">8</div>
+                    <input type="range" id="brush-size" min="1" max="100" value="5" oninput="DrawEngine.updateProps()">
+                    <span id="val-size" style="width:30px; text-align:right;">5</span>
                 </div>
-                <div class="slider-row">
+                <div class="prop-row">
                     <i class="fa-solid fa-eye-dropper" style="font-size:0.8rem"></i>
-                    <input type="range" id="prop-opacity" min="1" max="100" value="100" oninput="DrawEngine.updateProps()">
-                    <div class="slider-val" id="val-opacity">100</div>
+                    <input type="range" id="brush-opacity" min="1" max="100" value="100" oninput="DrawEngine.updateProps()">
+                    <span id="val-opacity" style="width:30px; text-align:right;">100</span>
                 </div>
-            </div>
-            
-            <div class="prop-section">
-                <h3>COLORS</h3>
-                <div class="color-picker-row">
+                <div class="color-picker-wrap">
                     <input type="color" id="color-picker" value="#000000" onchange="DrawEngine.updateProps()">
-                    <button class="btn" style="padding:10px; flex:1; font-size:1rem;" onclick="DrawEngine.setColor('#FFFFFF')">WHITE</button>
+                    <div style="flex:1; display:flex; gap:5px;" id="quick-colors">
+                        <div class="swatch" style="background:#000000;" onclick="DrawEngine.setColor('#000000')"></div>
+                        <div class="swatch" style="background:#FFFFFF;" onclick="DrawEngine.setColor('#FFFFFF')"></div>
+                        <div class="swatch" style="background:#EF4444;" onclick="DrawEngine.setColor('#EF4444')"></div>
+                        <div class="swatch" style="background:#3B82F6;" onclick="DrawEngine.setColor('#3B82F6')"></div>
+                        <div class="swatch" style="background:#10B981;" onclick="DrawEngine.setColor('#10B981')"></div>
+                    </div>
                 </div>
-                <div class="palette-grid" id="color-palette"></div>
+                <div class="palette" id="color-palette">
+                    <!-- JS generated palette -->
+                </div>
             </div>
             
-            <div class="layers-section">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3>LAYERS</h3>
-                    <button class="btn" style="padding:6px 12px; width:auto;" onclick="DrawEngine.addLayer()"><i class="fa-solid fa-plus"></i></button>
+            <div class="layers-panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="font-size:1rem;">Layers</h3>
+                    <button class="btn" style="padding:4px 8px; font-size:0.8rem;" onclick="DrawEngine.addLayer()"><i class="fa-solid fa-plus"></i></button>
                 </div>
-                <div id="layer-list" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
+                <div id="layer-list" style="display:flex; flex-direction:column-reverse; gap:5px;">
+                    <!-- Layers injected here -->
+                </div>
             </div>
         </div>
+        
+        <div id="overlay-msg" class="overlay-text">TIME'S UP!</div>
     </div>
 
     <!-- 4. VOTING SCREEN -->
     <div id="view-vote" class="view">
-        <h1 id="vote-title" style="font-size: 3rem;">RATE THIS DRAWING!</h1>
-        <div class="vote-img-box">
-            <img id="vote-image" class="vote-img" src="">
-        </div>
-        <div class="stars" id="star-container">
-            <button class="star-btn" onclick="Game.submitVote(1)"><i class="fa-solid fa-star"></i></button>
-            <button class="star-btn" onclick="Game.submitVote(2)"><i class="fa-solid fa-star"></i></button>
-            <button class="star-btn" onclick="Game.submitVote(3)"><i class="fa-solid fa-star"></i></button>
-            <button class="star-btn" onclick="Game.submitVote(4)"><i class="fa-solid fa-star"></i></button>
-            <button class="star-btn" onclick="Game.submitVote(5)"><i class="fa-solid fa-star"></i></button>
+        <div class="voting-container">
+            <h2 id="vote-title" style="margin-bottom: 20px; font-size: 2rem;">Rate this drawing!</h2>
+            <img id="vote-image" class="art-display" src="">
+            <div class="stars" id="star-container">
+                <button class="star-btn" onclick="Game.submitVote(1)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(2)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(3)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(4)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(5)"><i class="fa-solid fa-star"></i></button>
+            </div>
+            <p id="vote-wait" style="margin-top: 20px; font-size: 1.2rem; color: var(--accent); display:none;">Waiting for others...</p>
         </div>
     </div>
 
     <!-- 5. RESULTS SCREEN -->
     <div id="view-results" class="view">
-        <h1 style="font-size: 4rem; color:var(--success); text-shadow: 0 5px 0 #04a077;">WINNERS!</h1>
-        <div class="podium" id="podium-container"></div>
+        <div class="voting-container">
+            <h1 class="logo" style="font-size: 4rem; margin-bottom: 0;">Winners</h1>
+            <div class="podium-container" id="podium">
+                <!-- Injected via JS -->
+            </div>
+            <p style="margin-top:40px; color:var(--text-muted);">Returning to lobby...</p>
+        </div>
     </div>
 
     <script>
         const socket = io();
 
         /* =========================================
-           UI GENERATION & GAME LOGIC
+           UI NAVIGATION & GENERAL LOGIC
         ========================================= */
         const UI = {
             showView: (id) => {
@@ -308,119 +318,182 @@
                 document.getElementById(id).classList.add('active');
                 if(id === 'view-draw') DrawEngine.resize();
             },
-            initColors: () => {
-                const colors = [
-                    '#000000', '#4a4a4a', '#ff0000', '#ff7f00', '#ffff00', 
-                    '#00ff00', '#0000ff', '#4b0082', '#9400d3', '#ff1493',
-                    '#8b4513', '#d2691e', '#20b2aa', '#00ced1', '#1e90ff'
-                ];
-                const grid = document.getElementById('color-palette');
+            generatePalette: () => {
+                const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#0f111a', '#475569', '#94a3b8', '#f8fafc', '#7c2d12'];
+                const container = document.getElementById('color-palette');
                 colors.forEach(c => {
                     const el = document.createElement('div');
                     el.className = 'swatch';
                     el.style.backgroundColor = c;
                     el.onclick = () => DrawEngine.setColor(c);
-                    grid.appendChild(el);
+                    container.appendChild(el);
                 });
+            },
+            showOverlayMsg: (text, duration) => {
+                const el = document.getElementById('overlay-msg');
+                el.innerText = text;
+                el.style.opacity = 1;
+                setTimeout(() => el.style.opacity = 0, duration);
             }
         };
 
+        /* =========================================
+           MULTIPLAYER & GAME STATE
+        ========================================= */
         const Game = {
-            code: '', isOwner: false, voteTargetId: null, timerInterval: null, hasSubmitted: false,
+            name: '',
+            code: '',
+            isOwner: false,
+            voteTargetId: null,
+            timerInterval: null,
 
-            createRoom: () => socket.emit('create_room', { name: document.getElementById('player-name').value.trim() || 'Player' }),
-            joinRoom: () => {
-                const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-                if(code.length === 6) socket.emit('join_room', { code, name: document.getElementById('player-name').value.trim() || 'Player' });
+            showJoin: () => { document.getElementById('join-section').style.display = 'flex'; },
+            
+            createRoom: () => {
+                const name = document.getElementById('player-name').value.trim() || 'Player';
+                Game.name = name;
+                socket.emit('create_room', { name });
             },
-            toggleReady: () => socket.emit('toggle_ready', Game.code),
+
+            joinRoom: () => {
+                const name = document.getElementById('player-name').value.trim() || 'Player';
+                const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+                if(code.length === 6) {
+                    Game.name = name;
+                    socket.emit('join_room', { code, name });
+                }
+            },
+
+            toggleReady: () => { socket.emit('toggle_ready', Game.code); },
+            
             updateSettings: () => {
                 if(!Game.isOwner) return;
-                const set = { roundTime: document.getElementById('set-time').value, maxPlayers: document.getElementById('set-players').value, voteTime: 10 };
-                document.getElementById('lbl-time').innerText = set.roundTime;
-                document.getElementById('lbl-players').innerText = set.maxPlayers;
-                socket.emit('update_settings', { code: Game.code, settings: set });
+                const time = document.getElementById('set-time').value;
+                const players = document.getElementById('set-players').value;
+                const vote = document.getElementById('set-vote').value;
+                document.getElementById('lbl-time').innerText = time;
+                document.getElementById('lbl-players').innerText = players;
+                document.getElementById('lbl-vote').innerText = vote;
+                socket.emit('update_settings', { code: Game.code, settings: { roundTime: time, maxPlayers: players, voteTime: vote }});
             },
-            startGame: () => socket.emit('start_game', Game.code),
-            
-            submitEarly: () => {
-                if(Game.hasSubmitted) return;
-                Game.hasSubmitted = true;
-                document.getElementById('done-overlay').style.display = 'flex';
-                socket.emit('submit_drawing', { code: Game.code, image: DrawEngine.getFinalImage() });
+
+            sendChat: () => {
+                const input = document.getElementById('lobby-chat-input');
+                if(input.value.trim() !== '') {
+                    socket.emit('chat_msg', { code: Game.code, msg: input.value.trim() });
+                    input.value = '';
+                }
             },
+
+            startGame: () => { socket.emit('start_game', Game.code); },
+
             submitVote: (stars) => {
                 if(!Game.voteTargetId) return;
                 socket.emit('submit_vote', { code: Game.code, authorId: Game.voteTargetId, stars });
                 document.querySelectorAll('.star-btn').forEach((btn, i) => {
-                    btn.style.color = i < stars ? 'var(--warning)' : 'var(--panel-bg-hover)';
+                    if(i < stars) btn.style.color = '#FBBF24';
+                    else btn.style.color = 'var(--surface)';
                     btn.style.pointerEvents = 'none';
                 });
+                document.getElementById('vote-wait').style.display = 'block';
             }
         };
 
+        // --- Socket Listeners ---
         socket.on('error_msg', msg => alert(msg));
+        
         socket.on('room_joined', data => {
-            Game.code = data.code; Game.isOwner = data.isOwner;
-            document.getElementById('lobby-code').innerText = data.code;
+            Game.code = data.code;
+            Game.isOwner = data.isOwner;
+            document.getElementById('lobby-code-display').innerText = data.code;
             UI.showView('view-lobby');
+            
             if(Game.isOwner) {
-                document.getElementById('settings-area').style.pointerEvents = 'auto';
-                document.getElementById('settings-area').style.opacity = 1;
+                document.getElementById('lobby-settings').style.pointerEvents = 'auto';
+                document.getElementById('lobby-settings').style.opacity = 1;
+                document.getElementById('owner-notice').style.display = 'block';
                 document.getElementById('btn-start').style.display = 'block';
                 document.getElementById('btn-ready').style.display = 'none';
             }
         });
 
         socket.on('update_players', players => {
-            const list = document.getElementById('player-list');
+            const list = document.getElementById('lobby-players');
             list.innerHTML = '';
             let allReady = true;
             players.forEach(p => {
                 if(!p.ready) allReady = false;
-                list.innerHTML += `<div class="player-card ${p.ready ? 'ready' : ''}"><span>${p.name} ${p.id === socket.id ? '(YOU)' : ''}</span><i class="fa-solid fa-${p.ready ? 'check' : 'xmark'}" style="color:var(--${p.ready ? 'success' : 'danger'})"></i></div>`;
+                list.innerHTML += `
+                    <div class="player-card">
+                        <span>${p.name} ${p.id === socket.id ? '(You)' : ''}</span>
+                        <div class="status ${p.ready ? 'ready' : ''}"></div>
+                    </div>`;
             });
-            if(Game.isOwner && players.length > 1) document.getElementById('btn-start').disabled = !allReady;
+            if(Game.isOwner && players.length > 1) {
+                document.getElementById('btn-start').disabled = !allReady;
+            }
+        });
+
+        socket.on('chat_msg', data => {
+            const box = document.getElementById('lobby-chat');
+            const el = document.createElement('div');
+            el.className = `chat-msg ${data.sys ? 'sys' : ''}`;
+            el.innerHTML = data.sys ? data.text : `<b>${data.sender}:</b> ${data.text}`;
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        socket.on('settings_updated', settings => {
+            if(!Game.isOwner) {
+                document.getElementById('set-time').value = settings.roundTime;
+                document.getElementById('set-players').value = settings.maxPlayers;
+                document.getElementById('set-vote').value = settings.voteTime;
+                document.getElementById('lbl-time').innerText = settings.roundTime;
+                document.getElementById('lbl-players').innerText = settings.maxPlayers;
+                document.getElementById('lbl-vote').innerText = settings.voteTime;
+            }
         });
 
         socket.on('game_started', data => {
             UI.showView('view-draw');
             document.getElementById('game-theme').innerText = data.theme;
-            Game.hasSubmitted = false;
-            document.getElementById('done-overlay').style.display = 'none';
-            
             DrawEngine.init();
-
+            UI.showOverlayMsg('START DRAWING!', 2000);
+            
             let timeLeft = data.time;
-            clearInterval(Game.timerInterval);
             Game.timerInterval = setInterval(() => {
                 timeLeft--;
                 const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
                 const s = (timeLeft % 60).toString().padStart(2, '0');
                 document.getElementById('game-timer').innerText = `${m}:${s}`;
+                
+                if(timeLeft <= 0) {
+                    clearInterval(Game.timerInterval);
+                    UI.showOverlayMsg('TIME IS UP!', 3000);
+                    // Extract image
+                    setTimeout(() => {
+                        const finalImg = DrawEngine.getFinalImage();
+                        socket.emit('submit_drawing', { code: Game.code, image: finalImg });
+                    }, 2000);
+                }
             }, 1000);
         });
 
-        socket.on('force_submit', () => {
-            clearInterval(Game.timerInterval);
-            if(!Game.hasSubmitted) Game.submitEarly();
-        });
-
         socket.on('start_vote', data => {
-            clearInterval(Game.timerInterval);
             UI.showView('view-vote');
             Game.voteTargetId = data.authorId;
             document.getElementById('vote-image').src = data.image;
+            document.getElementById('vote-wait').style.display = 'none';
             
             const title = document.getElementById('vote-title');
             if(data.authorId === socket.id) {
-                title.innerText = "YOUR MASTERPIECE!";
+                title.innerText = "Your Masterpiece!";
                 document.getElementById('star-container').style.display = 'none';
             } else {
-                title.innerText = "RATE THIS DRAWING!";
+                title.innerText = "Rate this drawing!";
                 document.getElementById('star-container').style.display = 'flex';
                 document.querySelectorAll('.star-btn').forEach(btn => {
-                    btn.style.color = 'var(--panel-bg-hover)';
+                    btn.style.color = 'var(--surface)';
                     btn.style.pointerEvents = 'auto';
                 });
             }
@@ -428,65 +501,98 @@
 
         socket.on('show_results', top3 => {
             UI.showView('view-results');
-            const p = document.getElementById('podium-container');
+            const p = document.getElementById('podium');
             p.innerHTML = '';
             
-            const layout = [{ class: 'place-2', title: '2ND', data: top3[1] }, { class: 'place-1', title: '1ST', data: top3[0] }, { class: 'place-3', title: '3RD', data: top3[2] }];
-            layout.forEach(pos => {
+            const places = [
+                { class: 'place-2', title: '2nd', data: top3[1] },
+                { class: 'place-1', title: '1st', data: top3[0] },
+                { class: 'place-3', title: '3rd', data: top3[2] }
+            ];
+
+            places.forEach(pos => {
                 if(pos.data) {
                     p.innerHTML += `
                     <div class="podium-place ${pos.class}">
-                        <img class="podium-art" src="${pos.data.image}">
-                        <div class="podium-step">
-                            <span style="font-size:1.5rem; margin-bottom:5px;">${pos.data.name}</span>
-                            ${pos.title}
-                            <span style="font-size:1.2rem; font-weight:700;">${pos.data.score} ⭐</span>
+                        <div style="text-align:center; margin-bottom:10px;">
+                            <h3 style="color:var(--accent)">${pos.data.name}</h3>
+                            <p>${pos.data.score} ⭐</p>
                         </div>
+                        <img class="podium-art" src="${pos.data.image}">
+                        <div class="podium-step">${pos.title}</div>
                     </div>`;
                 }
             });
 
-            const duration = 10000, end = Date.now() + duration;
+            // Fire Confetti
+            const duration = 10000;
+            const end = Date.now() + duration;
             (function frame() {
-                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#3a86ff', '#ff006e', '#ffd166'] });
-                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#3a86ff', '#ff006e', '#ffd166'] });
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#7C3AED', '#F472B6', '#FBBF24'] });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#7C3AED', '#F472B6', '#FBBF24'] });
                 if (Date.now() < end) requestAnimationFrame(frame);
             }());
         });
 
-        socket.on('return_to_lobby', () => { UI.showView('view-lobby'); socket.emit('toggle_ready', Game.code); socket.emit('toggle_ready', Game.code); });
+        socket.on('return_to_lobby', () => {
+            UI.showView('view-lobby');
+            document.querySelectorAll('.status').forEach(el => el.classList.remove('ready'));
+            if(Game.isOwner) document.getElementById('btn-start').disabled = true;
+        });
 
 
         /* =========================================
-           ADVANCED DRAWING ENGINE
+           HIGH PERFORMANCE DRAWING ENGINE
         ========================================= */
         const DrawEngine = {
-            width: 1920, height: 1080,
-            layers: [], activeLayer: 0, history: [],
-            tool: 'pencil', color: '#000000', size: 8, opacity: 1,
+            width: 1920, // Virtual canvas size
+            height: 1080,
+            layers: [],
+            activeLayer: 0,
+            history: [],
+            redoStack: [],
+            
+            // State
+            tool: 'pencil',
+            color: '#000000',
+            size: 5,
+            opacity: 1,
             
             // Viewport
-            scale: 1, panX: 0, panY: 0, isPanning: false,
+            scale: 1,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
             
-            // Interaction State
-            isDrawing: false, lastPos: null, startPos: null, previewData: null,
-            airbrushRAF: null, // Request animation frame for continuous airbrush
+            // Input state
+            isDrawing: false,
+            points: [],
+            lastRenderPoint: null,
+            startX: 0, startY: 0,
             
             // DOM
             workspace: document.getElementById('workspace'),
             wrap: document.getElementById('canvas-wrap'),
+            minimap: document.getElementById('minimap-canvas'),
+            miniCtx: document.getElementById('minimap-canvas').getContext('2d'),
+            viewport: document.getElementById('minimap-viewport'),
 
             init: function() {
                 this.workspace.innerHTML = '';
-                this.layers = []; this.history = [];
+                this.layers = [];
+                this.history = [];
+                this.redoStack = [];
                 this.workspace.style.width = this.width + 'px';
                 this.workspace.style.height = this.height + 'px';
                 
+                // Add default white background layer
                 this.addLayer("Background", true);
                 this.fillCanvas('#ffffff');
+                
+                // Add drawing layer
                 this.addLayer("Layer 1");
 
-                // Center canvas visually
+                // Center canvas
                 const rect = this.wrap.getBoundingClientRect();
                 this.scale = Math.min(rect.width / this.width, rect.height / this.height) * 0.9;
                 this.panX = (rect.width - (this.width * this.scale)) / 2;
@@ -498,13 +604,17 @@
                 this.saveState();
             },
 
-            addLayer: function(name = `Layer ${this.layers.length}`, isBg = false) {
+            addLayer: function(name = `Layer ${this.layers.length}`, noTransparent = false) {
                 const canvas = document.createElement('canvas');
-                canvas.width = this.width; canvas.height = this.height;
+                canvas.width = this.width;
+                canvas.height = this.height;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
                 this.workspace.appendChild(canvas);
-                this.layers.push({ name, canvas, ctx, visible: true, isBg });
+                
+                this.layers.push({ name, canvas, ctx, visible: true, locked: false });
                 this.activeLayer = this.layers.length - 1;
                 this.updateLayerUI();
             },
@@ -514,14 +624,20 @@
                 list.innerHTML = '';
                 this.layers.forEach((l, i) => {
                     const el = document.createElement('div');
-                    el.className = `layer-card ${i === this.activeLayer ? 'active' : ''}`;
+                    el.className = `layer-item ${i === this.activeLayer ? 'active' : ''}`;
                     el.onclick = () => { this.activeLayer = i; this.updateLayerUI(); };
-                    el.innerHTML = `<span>${l.name}</span> <i class="fa-solid fa-eye${l.visible ? '' : '-slash'}" onclick="event.stopPropagation(); DrawEngine.toggleLayer(${i})"></i>`;
+                    el.innerHTML = `
+                        <span>${l.name}</span>
+                        <div style="display:flex; gap:10px;">
+                            <i class="fa-solid fa-eye${l.visible ? '' : '-slash'}" onclick="event.stopPropagation(); DrawEngine.toggleLayerVisibility(${i})"></i>
+                        </div>
+                    `;
                     list.appendChild(el);
                 });
+                this.updateMinimap();
             },
 
-            toggleLayer: function(i) {
+            toggleLayerVisibility: function(i) {
                 this.layers[i].visible = !this.layers[i].visible;
                 this.layers[i].canvas.style.display = this.layers[i].visible ? 'block' : 'none';
                 this.updateLayerUI();
@@ -529,253 +645,407 @@
 
             updateTransform: function() {
                 this.workspace.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
-            },
-            resize: function() { if(this.workspace) this.updateTransform(); },
+                
+                // Update Minimap viewport
+                const mw = this.minimap.width;
+                const mh = this.minimap.height;
+                const rect = this.wrap.getBoundingClientRect();
+                
+                const viewW = (rect.width / this.scale) * (mw / this.width);
+                const viewH = (rect.height / this.scale) * (mh / this.height);
+                const viewX = (-this.panX / this.scale) * (mw / this.width);
+                const viewY = (-this.panY / this.scale) * (mh / this.height);
 
-            getPos: function(e) {
+                this.viewport.style.width = `${viewW}px`;
+                this.viewport.style.height = `${viewH}px`;
+                this.viewport.style.left = `${viewX}px`;
+                this.viewport.style.top = `${viewY}px`;
+            },
+
+            updateMinimap: function() {
+                this.minimap.width = 150;
+                this.minimap.height = 150 * (this.height / this.width);
+                this.miniCtx.clearRect(0,0, this.minimap.width, this.minimap.height);
+                this.layers.forEach(l => {
+                    if(l.visible) {
+                        this.miniCtx.drawImage(l.canvas, 0, 0, this.minimap.width, this.minimap.height);
+                    }
+                });
+            },
+
+            // Coordinate Mapping
+            getMousePos: function(e) {
                 const rect = this.workspace.getBoundingClientRect();
-                return { x: (e.clientX - rect.left) / this.scale, y: (e.clientY - rect.top) / this.scale };
+                return {
+                    x: (e.clientX - rect.left) / this.scale,
+                    y: (e.clientY - rect.top) / this.scale
+                };
             },
 
             setupEvents: function() {
-                this.wrap.onpointerdown = this.down.bind(this);
-                window.onpointermove = this.move.bind(this);
-                window.onpointerup = this.up.bind(this);
+                // Prevent duplicate listener bindings
+                this.wrap.onpointerdown = this.handlePointerDown.bind(this);
+                window.onpointermove = this.handlePointerMove.bind(this);
+                window.onpointerup = this.handlePointerUp.bind(this);
                 
                 this.wrap.onwheel = (e) => {
-                    if(Game.hasSubmitted) return;
                     e.preventDefault();
-                    const delta = -e.deltaY * 0.001;
+                    const zoomSensitivity = 0.001;
+                    const delta = -e.deltaY * zoomSensitivity;
                     const oldScale = this.scale;
                     this.scale = Math.min(Math.max(0.1, this.scale + delta), 5);
+                    
+                    // Zoom to mouse
                     const rect = this.wrap.getBoundingClientRect();
-                    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-                    this.panX = mx - (mx - this.panX) * (this.scale / oldScale);
-                    this.panY = my - (my - this.panY) * (this.scale / oldScale);
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    
+                    this.panX = mouseX - (mouseX - this.panX) * (this.scale / oldScale);
+                    this.panY = mouseY - (mouseY - this.panY) * (this.scale / oldScale);
+                    
                     this.updateTransform();
                 };
 
+                // Keyboard Shortcuts
                 window.onkeydown = (e) => {
-                    if(Game.hasSubmitted || e.target.tagName === 'INPUT') return;
+                    if(e.target.tagName === 'INPUT') return;
                     if(e.code === 'Space') { this.isPanning = true; this.wrap.style.cursor = 'grab'; }
                     if(e.ctrlKey && e.code === 'KeyZ') this.undo();
+                    if(e.ctrlKey && e.code === 'KeyY') this.redo();
                     if(e.code === 'KeyB') this.setTool('pencil');
                     if(e.code === 'KeyE') this.setTool('eraser');
                     if(e.code === 'KeyG') this.setTool('fill');
-                    if(e.code === 'KeyR') this.setTool('rect');
-                    if(e.code === 'KeyC') this.setTool('circle');
-                    if(e.code === 'KeyL') this.setTool('line');
                 };
                 window.onkeyup = (e) => {
                     if(e.code === 'Space') { this.isPanning = false; this.wrap.style.cursor = 'crosshair'; }
                 };
             },
 
-            down: function(e) {
-                if(Game.hasSubmitted) return;
+            // Core Drawing Logic
+            handlePointerDown: function(e) {
                 if(e.button === 1 || this.isPanning || this.tool === 'pan') {
                     this.isPanning = true;
-                    this.startPos = { x: e.clientX - this.panX, y: e.clientY - this.panY };
+                    this.startX = e.clientX - this.panX;
+                    this.startY = e.clientY - this.panY;
                     this.wrap.style.cursor = 'grabbing';
                     return;
                 }
 
-                const pos = this.getPos(e);
+                if(this.tool === 'text') return this.handleTextTool(e);
+
                 this.isDrawing = true;
-                this.startPos = pos; this.lastPos = pos;
+                const pos = this.getMousePos(e);
+                this.startX = pos.x;
+                this.startY = pos.y;
+                this.points = [pos];
+                this.lastRenderPoint = pos;
 
                 const layer = this.layers[this.activeLayer];
-                if(!layer.visible) return;
-                const ctx = layer.ctx;
-                
-                ctx.lineWidth = this.size;
-                ctx.strokeStyle = this.color; ctx.fillStyle = this.color;
-                ctx.globalAlpha = this.opacity;
-                ctx.globalCompositeOperation = 'source-over'; // default
+                if(layer.locked || !layer.visible) return;
 
+                const ctx = layer.ctx;
+                ctx.globalAlpha = this.opacity;
+                ctx.lineWidth = this.size;
+                ctx.strokeStyle = this.color;
+                ctx.fillStyle = this.color;
+
+                // Tool specific setup
                 if(this.tool === 'eraser') {
                     ctx.globalCompositeOperation = 'destination-out';
-                    ctx.globalAlpha = 1; // Erasers should be fully opaque typically
+                    ctx.strokeStyle = 'rgba(0,0,0,1)';
                 } else if(this.tool === 'marker') {
                     ctx.globalCompositeOperation = 'multiply';
                     ctx.globalAlpha = this.opacity * 0.5;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
                 }
 
                 if(this.tool === 'fill') {
                     this.floodFill(Math.floor(pos.x), Math.floor(pos.y));
                     this.isDrawing = false;
                     this.saveState();
-                } else if(this.tool === 'airbrush') {
-                    // Start continuous spray loop
-                    this.continuousAirbrush();
                 } else if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Save canvas state for shape preview
                     this.previewData = ctx.getImageData(0,0, this.width, this.height);
                 } else {
-                    ctx.beginPath(); ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2); ctx.fill();
-                    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+                    // Start drawing path
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
                 }
             },
 
-            move: function(e) {
+            handlePointerMove: function(e) {
                 if(this.isPanning) {
-                    this.panX = e.clientX - this.startPos.x;
-                    this.panY = e.clientY - this.startPos.y;
+                    this.panX = e.clientX - this.startX;
+                    this.panY = e.clientY - this.startY;
                     this.updateTransform();
                     return;
                 }
+                
                 if(!this.isDrawing) return;
-                const pos = this.getPos(e);
-                this.lastPos = pos; // Update last position for airbrush
 
-                const ctx = this.layers[this.activeLayer].ctx;
+                const pos = this.getMousePos(e);
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
 
                 if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Shape previews
                     ctx.putImageData(this.previewData, 0, 0);
                     ctx.beginPath();
-                    if(this.tool === 'rect') ctx.rect(this.startPos.x, this.startPos.y, pos.x - this.startPos.x, pos.y - this.startPos.y);
-                    else if(this.tool === 'circle') {
-                        const r = Math.sqrt(Math.pow(pos.x - this.startPos.x, 2) + Math.pow(pos.y - this.startPos.y, 2));
-                        ctx.arc(this.startPos.x, this.startPos.y, r, 0, Math.PI*2);
+                    if(this.tool === 'rect') {
+                        ctx.rect(this.startX, this.startY, pos.x - this.startX, pos.y - this.startY);
+                    } else if(this.tool === 'circle') {
+                        const r = Math.sqrt(Math.pow(pos.x - this.startX, 2) + Math.pow(pos.y - this.startY, 2));
+                        ctx.arc(this.startX, this.startY, r, 0, Math.PI*2);
                     } else if(this.tool === 'line') {
-                        ctx.moveTo(this.startPos.x, this.startPos.y); ctx.lineTo(pos.x, pos.y);
+                        ctx.moveTo(this.startX, this.startY);
+                        ctx.lineTo(pos.x, pos.y);
                     }
                     ctx.stroke();
-                } else if (this.tool !== 'airbrush') {
-                    ctx.lineTo(pos.x, pos.y); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+                } else {
+                    // Smooth Freehand Drawing (Quadratic Curve Interpolation)
+                    this.points.push(pos);
+                    
+                    // Airbrush effect
+                    if(this.tool === 'airbrush') {
+                        for(let i=0; i<10; i++) {
+                            const offsetX = (Math.random() - 0.5) * this.size * 2;
+                            const offsetY = (Math.random() - 0.5) * this.size * 2;
+                            if(offsetX*offsetX + offsetY*offsetY < this.size*this.size) {
+                                ctx.globalAlpha = this.opacity * 0.1;
+                                ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 1, 1);
+                            }
+                        }
+                        return;
+                    }
+
+                    if(this.points.length >= 3) {
+                        const lastTwo = this.points.slice(-2);
+                        const control = lastTwo[0];
+                        const end = {
+                            x: (lastTwo[0].x + lastTwo[1].x) / 2,
+                            y: (lastTwo[0].y + lastTwo[1].y) / 2
+                        };
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(this.lastRenderPoint.x, this.lastRenderPoint.y);
+                        ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
+                        ctx.stroke();
+                        
+                        this.lastRenderPoint = end;
+                    }
                 }
             },
 
-            up: function(e) {
+            handlePointerUp: function(e) {
                 if(this.isPanning && e.button !== 1 && this.tool !== 'pan') this.isPanning = false;
                 if(!this.isDrawing) return;
                 this.isDrawing = false;
                 
-                // Stop airbrush loop
-                if (this.airbrushRAF) { cancelAnimationFrame(this.airbrushRAF); this.airbrushRAF = null; }
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
+                
+                if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Finalize shape
+                    ctx.stroke();
+                } else if(!['airbrush'].includes(this.tool) && this.points.length > 0) {
+                    // Finish final segment
+                    ctx.beginPath();
+                    ctx.moveTo(this.lastRenderPoint.x, this.lastRenderPoint.y);
+                    ctx.lineTo(this.points[this.points.length-1].x, this.points[this.points.length-1].y);
+                    ctx.stroke();
+                }
 
-                const ctx = this.layers[this.activeLayer].ctx;
-                if(['rect', 'circle', 'line'].includes(this.tool)) ctx.stroke();
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalCompositeOperation = 'source-over'; // Reset
+                this.updateMinimap();
                 this.saveState();
             },
 
-            // --- Real Continuous Airbrush ---
-            continuousAirbrush: function() {
-                if (!this.isDrawing) return;
-                const ctx = this.layers[this.activeLayer].ctx;
-                ctx.fillStyle = this.color;
-                ctx.globalAlpha = this.opacity * 0.1; // Very soft particles
-                
-                // Draw multiple particles per frame around the cursor
-                for (let i = 0; i < (this.size * 2); i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const radius = Math.random() * (this.size / 2);
-                    const x = this.lastPos.x + Math.cos(angle) * radius;
-                    const y = this.lastPos.y + Math.sin(angle) * radius;
-                    ctx.fillRect(x, y, 1, 1);
-                }
-                
-                this.airbrushRAF = requestAnimationFrame(() => this.continuousAirbrush());
+            handleTextTool: function(e) {
+                const pos = this.getMousePos(e);
+                const input = document.getElementById('text-input-overlay');
+                input.style.display = 'block';
+                input.style.left = e.clientX + 'px';
+                input.style.top = e.clientY + 'px';
+                input.style.fontSize = (this.size * this.scale) + 'px';
+                input.style.color = this.color;
+                input.value = '';
+                input.focus();
+
+                input.onblur = () => {
+                    if(input.value.trim() !== '') {
+                        const ctx = this.layers[this.activeLayer].ctx;
+                        ctx.font = `${this.size}px Poppins`;
+                        ctx.fillStyle = this.color;
+                        ctx.globalAlpha = this.opacity;
+                        ctx.fillText(input.value, pos.x, pos.y + this.size);
+                        this.saveState();
+                        this.updateMinimap();
+                    }
+                    input.style.display = 'none';
+                };
+                input.onkeydown = (ev) => { if(ev.key === 'Enter') input.blur(); };
             },
 
-            floodFill: function(x, y) {
-                const ctx = this.layers[this.activeLayer].ctx;
-                const imgData = ctx.getImageData(0,0,this.width,this.height);
+            // State Management
+            saveState: function() {
+                const state = [];
+                this.layers.forEach(l => {
+                    state.push(l.ctx.getImageData(0,0,this.width,this.height));
+                });
+                this.history.push(state);
+                if(this.history.length > 20) this.history.shift(); // Limit undo size
+                this.redoStack = [];
+            },
+
+            undo: function() {
+                if(this.history.length > 1) {
+                    this.redoStack.push(this.history.pop());
+                    const state = this.history[this.history.length - 1];
+                    state.forEach((imgData, i) => {
+                        this.layers[i].ctx.putImageData(imgData, 0, 0);
+                    });
+                    this.updateMinimap();
+                }
+            },
+
+            redo: function() {
+                if(this.redoStack.length > 0) {
+                    const state = this.redoStack.pop();
+                    state.forEach((imgData, i) => {
+                        this.layers[i].ctx.putImageData(imgData, 0, 0);
+                    });
+                    this.history.push(state);
+                    this.updateMinimap();
+                }
+            },
+
+            // Flood Fill Algorithm
+            floodFill: function(startX, startY) {
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
+                const w = this.width, h = this.height;
+                const imgData = ctx.getImageData(0,0,w,h);
                 const data = imgData.data;
-                const getIdx = (x,y) => (y * this.width + x) * 4;
-                const startIdx = getIdx(x, y);
-                const [r, g, b, a] = [data[startIdx], data[startIdx+1], data[startIdx+2], data[startIdx+3]];
-                
-                const hex = this.tool === 'eraser' ? 'ffffff' : this.color.replace('#','');
-                const [fr, fg, fb] = [parseInt(hex.substring(0,2),16), parseInt(hex.substring(2,4),16), parseInt(hex.substring(4,6),16)];
 
-                if(r===fr && g===fg && b===fb && (a===255 || this.tool==='eraser')) return;
+                const getPixelIndex = (x,y) => (y * w + x) * 4;
+                const startIdx = getPixelIndex(startX, startY);
+                const startR = data[startIdx], startG = data[startIdx+1], startB = data[startIdx+2], startA = data[startIdx+3];
 
-                const match = (i) => data[i]===r && data[i+1]===g && data[i+2]===b && data[i+3]===a;
-                const set = (i) => { data[i]=fr; data[i+1]=fg; data[i+2]=fb; data[i+3]=this.tool==='eraser'?0:255; };
+                // Convert hex color to rgb
+                const hex = this.color.replace('#','');
+                const fillR = parseInt(hex.substring(0,2), 16);
+                const fillG = parseInt(hex.substring(2,4), 16);
+                const fillB = parseInt(hex.substring(4,6), 16);
 
-                const stack = [[x, y]];
-                while(stack.length) {
-                    let [cx, cy] = stack.pop();
-                    let idx = getIdx(cx, cy);
-                    while(cy >= 0 && match(idx)) { cy--; idx -= this.width*4; }
-                    cy++; idx += this.width*4;
+                if(startR === fillR && startG === fillG && startB === fillB && startA === 255) return;
+
+                const matchStartColor = (idx) => {
+                    return data[idx] === startR && data[idx+1] === startG && data[idx+2] === startB && data[idx+3] === startA;
+                };
+
+                const setPixel = (idx) => {
+                    data[idx] = fillR; data[idx+1] = fillG; data[idx+2] = fillB; data[idx+3] = 255;
+                };
+
+                const pixelStack = [[startX, startY]];
+                while(pixelStack.length > 0) {
+                    let newPos = pixelStack.pop();
+                    let x = newPos[0], y = newPos[1];
+                    let idx = getPixelIndex(x, y);
                     
-                    let left = false, right = false;
-                    while(cy < this.height && match(idx)) {
-                        set(idx);
-                        if(cx > 0) {
-                            if(match(idx-4)) { if(!left) { stack.push([cx-1, cy]); left=true; } }
-                            else left = false;
+                    while(y-- >= 0 && matchStartColor(idx)) idx -= w*4;
+                    idx += w*4; ++y;
+                    
+                    let reachLeft = false, reachRight = false;
+                    while(y++ < h-1 && matchStartColor(idx)) {
+                        setPixel(idx);
+                        if(x > 0) {
+                            if(matchStartColor(idx - 4)) {
+                                if(!reachLeft) { pixelStack.push([x-1, y]); reachLeft = true; }
+                            } else if(reachLeft) reachLeft = false;
                         }
-                        if(cx < this.width-1) {
-                            if(match(idx+4)) { if(!right) { stack.push([cx+1, cy]); right=true; } }
-                            else right = false;
+                        if(x < w-1) {
+                            if(matchStartColor(idx + 4)) {
+                                if(!reachRight) { pixelStack.push([x+1, y]); reachRight = true; }
+                            } else if(reachRight) reachRight = false;
                         }
-                        cy++; idx += this.width*4;
+                        idx += w*4;
                     }
                 }
                 ctx.putImageData(imgData, 0, 0);
             },
 
-            saveState: function() {
-                const state = [];
-                this.layers.forEach(l => state.push(l.ctx.getImageData(0,0,this.width,this.height)));
-                this.history.push(state);
-                if(this.history.length > 20) this.history.shift();
-            },
-            undo: function() {
-                if(this.history.length > 1) {
-                    this.history.pop();
-                    const state = this.history[this.history.length-1];
-                    state.forEach((imgData, i) => this.layers[i].ctx.putImageData(imgData, 0, 0));
-                }
-            },
-            clearCanvas: function() {
-                const ctx = this.layers[this.activeLayer].ctx;
-                ctx.clearRect(0,0,this.width,this.height);
-                if(this.layers[this.activeLayer].isBg) this.fillCanvas('#ffffff');
-                this.saveState();
-            },
-            fillCanvas: function(color) {
-                const ctx = this.layers[this.activeLayer].ctx;
-                ctx.fillStyle = color; ctx.fillRect(0,0,this.width,this.height);
-            },
-            
+            // UI Callbacks
             setTool: function(t) {
                 this.tool = t;
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-                const btn = document.getElementById('tool-' + t);
-                if(btn) btn.classList.add('active');
-                this.wrap.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
+                event.currentTarget.classList.add('active');
+                this.wrap.style.cursor = t === 'pan' ? 'grab' : (t === 'text' ? 'text' : 'crosshair');
             },
-            setColor: function(c) { 
-                this.color = c; document.getElementById('color-picker').value = c; 
-                document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-                if(this.tool === 'eraser') this.setTool('pencil');
+            
+            setColor: function(c) {
+                this.color = c;
+                document.getElementById('color-picker').value = c;
             },
+            
             updateProps: function() {
-                this.size = parseInt(document.getElementById('prop-size').value);
-                this.opacity = parseInt(document.getElementById('prop-opacity').value) / 100;
+                this.size = parseInt(document.getElementById('brush-size').value);
+                this.opacity = parseInt(document.getElementById('brush-opacity').value) / 100;
                 this.color = document.getElementById('color-picker').value;
                 document.getElementById('val-size').innerText = this.size;
                 document.getElementById('val-opacity').innerText = Math.round(this.opacity*100);
             },
+
+            clearCanvas: function() {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.clearRect(0,0,this.width,this.height);
+                if(this.activeLayer === 0) this.fillCanvas('#ffffff');
+                this.saveState();
+                this.updateMinimap();
+            },
+
+            fillCanvas: function(color) {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.fillStyle = color;
+                ctx.fillRect(0,0,this.width,this.height);
+            },
+
+            resize: function() {
+                if(this.workspace) this.updateTransform();
+            },
+
             getFinalImage: function() {
-                const comp = document.createElement('canvas'); comp.width = this.width; comp.height = this.height;
+                // Composite all visible layers
+                const comp = document.createElement('canvas');
+                comp.width = this.width; comp.height = this.height;
                 const ctx = comp.getContext('2d');
-                ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,this.width,this.height);
-                this.layers.forEach(l => { if(l.visible) ctx.drawImage(l.canvas, 0, 0); });
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0,0,this.width,this.height);
                 
-                const out = document.createElement('canvas'); out.width = 1280; out.height = 720;
-                out.getContext('2d').drawImage(comp, 0, 0, 1280, 720);
+                this.layers.forEach(l => {
+                    if(l.visible) ctx.drawImage(l.canvas, 0, 0);
+                });
+                
+                // Downscale for network transmission (saving bandwidth)
+                const out = document.createElement('canvas');
+                out.width = 1280; out.height = 720;
+                const outCtx = out.getContext('2d');
+                outCtx.drawImage(comp, 0, 0, 1280, 720);
+                
                 return out.toDataURL('image/jpeg', 0.85);
             }
         };
 
+        // Window Resizing handler
         window.addEventListener('resize', () => DrawEngine.resize());
-        UI.initColors();
+
+        // Initialize UI components
+        UI.generatePalette();
+        
     </script>
 </body>
 </html>

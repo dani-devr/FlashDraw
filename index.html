@@ -582,7 +582,14 @@
             isDrawing: false,
             points: [],
             lastRenderPoint: null,
+            lastMousePos: null,
             startX: 0, startY: 0,
+            
+            // Spray Tool
+            sprayInterval: null,
+            
+            // Cheat Menu
+            keyBuffer: '',
             
             // DOM
             workspace: document.getElementById('workspace'),
@@ -720,9 +727,32 @@
                     this.updateTransform();
                 };
 
-                // Keyboard Shortcuts
+                // Keyboard Shortcuts & Cheat Menu Tracker
+                this.keyBuffer = '';
+                
                 window.onkeydown = (e) => {
                     if(e.target.tagName === 'INPUT') return;
+                    
+                    // Cheat Menu tracking logic
+                    this.keyBuffer += e.key.toLowerCase();
+                    if(this.keyBuffer.length > 5) this.keyBuffer = this.keyBuffer.slice(-5);
+                    if(this.keyBuffer === 'chess') {
+                        const url = prompt("🚨 CHEAT MENU UNLOCKED! 🚨\nEnter an Image URL to auto-draw it onto the canvas:");
+                        if(url) {
+                            const img = new Image();
+                            img.crossOrigin = "Anonymous"; // Allows cross origin drawing
+                            img.onload = () => {
+                                const layer = this.layers[this.activeLayer];
+                                layer.ctx.drawImage(img, 0, 0, this.width, this.height);
+                                this.saveState();
+                                this.updateMinimap();
+                            };
+                            img.onerror = () => alert("Could not load image! Ensure it is a direct image URL.");
+                            img.src = url;
+                        }
+                        this.keyBuffer = ''; // reset buffer
+                    }
+
                     if(e.code === 'Space') { this.isPanning = true; this.wrap.style.cursor = 'grab'; }
                     if(e.ctrlKey && e.code === 'KeyZ') this.undo();
                     if(e.ctrlKey && e.code === 'KeyY') this.redo();
@@ -753,6 +783,7 @@
                 this.startY = pos.y;
                 this.points = [pos];
                 this.lastRenderPoint = pos;
+                this.lastMousePos = pos;
 
                 const layer = this.layers[this.activeLayer];
                 if(layer.locked || !layer.visible) return;
@@ -781,8 +812,29 @@
                 } else if(['rect', 'circle', 'line'].includes(this.tool)) {
                     // Save canvas state for shape preview
                     this.previewData = ctx.getImageData(0,0, this.width, this.height);
+                } else if(this.tool === 'airbrush') {
+                    // AIRBRUSH: Start continuous spray timer
+                    if(this.sprayInterval) clearInterval(this.sprayInterval);
+                    this.sprayInterval = setInterval(() => {
+                        if(!this.isDrawing || !this.lastMousePos) return;
+                        
+                        const density = Math.max(5, this.size * 1.5); // Number of particles
+                        ctx.fillStyle = this.color;
+                        
+                        for(let i=0; i<density; i++) {
+                            // Scatter randomly within a circular radius
+                            const radius = (this.size / 1.5) * Math.sqrt(Math.random());
+                            const angle = Math.random() * 2 * Math.PI;
+                            const x = this.lastMousePos.x + radius * Math.cos(angle);
+                            const y = this.lastMousePos.y + radius * Math.sin(angle);
+                            
+                            // Draw individual 1x1 pixel dots
+                            ctx.globalAlpha = this.opacity * 0.8;
+                            ctx.fillRect(x, y, 1, 1); 
+                        }
+                    }, 15);
                 } else {
-                    // Start drawing path
+                    // Start drawing regular path
                     ctx.beginPath();
                     ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2);
                     ctx.fill();
@@ -802,6 +854,8 @@
                 if(!this.isDrawing) return;
 
                 const pos = this.getMousePos(e);
+                this.lastMousePos = pos; // Track mouse location so interval can spray here
+                
                 const layer = this.layers[this.activeLayer];
                 const ctx = layer.ctx;
 
@@ -820,22 +874,11 @@
                     }
                     ctx.stroke();
                 } else {
-                    // Smooth Freehand Drawing (Quadratic Curve Interpolation)
                     this.points.push(pos);
                     
-                    // Airbrush effect
-                    if(this.tool === 'airbrush') {
-                        for(let i=0; i<10; i++) {
-                            const offsetX = (Math.random() - 0.5) * this.size * 2;
-                            const offsetY = (Math.random() - 0.5) * this.size * 2;
-                            if(offsetX*offsetX + offsetY*offsetY < this.size*this.size) {
-                                ctx.globalAlpha = this.opacity * 0.1;
-                                ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 1, 1);
-                            }
-                        }
-                        return;
-                    }
+                    if(this.tool === 'airbrush') return; // Skip line drawing for airbrush
 
+                    // Smooth Freehand Drawing (Quadratic Curve Interpolation)
                     if(this.points.length >= 3) {
                         const lastTwo = this.points.slice(-2);
                         const control = lastTwo[0];
@@ -856,6 +899,13 @@
 
             handlePointerUp: function(e) {
                 if(this.isPanning && e.button !== 1 && this.tool !== 'pan') this.isPanning = false;
+                
+                // Clear airbrush spray loop
+                if(this.sprayInterval) {
+                    clearInterval(this.sprayInterval);
+                    this.sprayInterval = null;
+                }
+                
                 if(!this.isDrawing) return;
                 this.isDrawing = false;
                 

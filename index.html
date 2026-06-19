@@ -4,181 +4,165 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flash Draw!</title>
-    <!-- Gartic style chunky font -->
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root {
-            --bg-light: #2196F3;
-            --bg-dark: #0D47A1;
-            --panel-bg: rgba(13, 71, 161, 0.4);
-            --panel-border: rgba(255, 255, 255, 0.2);
-            --ui-white: #ffffff;
-            --ui-text: #2c3e50;
-            --accent-pink: #FF4081;
-            --btn-blue: #29B6F6;
-            --btn-blue-dark: #0288D1;
-            --btn-green: #00E676;
-            --btn-green-dark: #00C853;
-            --btn-red: #FF5252;
-            --btn-red-dark: #D50000;
+            --bg-color: #0b132b;
+            --panel-bg: #1c2541;
+            --panel-bg-hover: #3a506b;
+            --border-color: #3a506b;
+            --text-main: #ffffff;
+            --text-muted: #8d99ae;
+            --primary: #3a86ff;
+            --primary-hover: #00509d;
+            --accent: #ff006e;
+            --success: #06d6a0;
+            --danger: #ef233c;
+            --warning: #ffd166;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Nunito', sans-serif; user-select: none; }
         
         body { 
-            /* Blue Halftone Effect */
-            background-color: var(--bg-light);
-            background-image: radial-gradient(var(--bg-dark) 15%, transparent 16%), radial-gradient(var(--bg-dark) 15%, transparent 16%);
-            background-size: 30px 30px;
-            background-position: 0 0, 15px 15px;
-            color: var(--ui-white);
-            overflow: hidden; 
-            height: 100vh; 
-            width: 100vw; 
-            display: flex; 
-            flex-direction: column; 
+            background-color: var(--bg-color); color: var(--text-main); 
+            overflow: hidden; height: 100vh; width: 100vw; display: flex; flex-direction: column; 
         }
+
+        /* UI Elements */
+        h1, h2, h3 { text-transform: uppercase; letter-spacing: 1px; font-weight: 900; }
         
-        /* Typography & Globals */
-        h1, h2, h3 { text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 3px 0 rgba(0,0,0,0.2); }
-        
-        /* Gartic Style Buttons */
         .btn { 
-            background: var(--btn-blue); color: white; border: none; padding: 12px 24px; border-radius: 12px; 
+            background: var(--primary); color: white; border: none; padding: 14px 24px; border-radius: 12px; 
             font-size: 1.2rem; font-weight: 900; cursor: pointer; text-transform: uppercase;
-            border-bottom: 6px solid var(--btn-blue-dark); transition: all 0.1s; text-shadow: 0 2px 0 rgba(0,0,0,0.2);
-            display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+            box-shadow: 0 6px 0 var(--primary-hover); transition: 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
         }
-        .btn:active { border-bottom-width: 0px; transform: translateY(6px); margin-bottom: 6px; }
-        .btn.green { background: var(--btn-green); border-bottom-color: var(--btn-green-dark); }
-        .btn.red { background: var(--btn-red); border-bottom-color: var(--btn-red-dark); }
+        .btn:active { box-shadow: 0 0px 0 var(--primary-hover); transform: translateY(6px); }
+        .btn.green { background: var(--success); box-shadow: 0 6px 0 #04a077; }
+        .btn.red { background: var(--danger); box-shadow: 0 6px 0 #ba1826; }
         
         .input { 
-            background: var(--ui-white); color: var(--ui-text); border: 4px solid var(--bg-dark); 
-            padding: 12px 16px; border-radius: 12px; font-size: 1.2rem; font-weight: 800; outline: none; width: 100%; text-align: center;
+            background: var(--bg-color); color: var(--text-main); border: 3px solid var(--border-color); 
+            padding: 14px; border-radius: 12px; font-size: 1.2rem; font-weight: 800; outline: none; width: 100%; text-align: center; transition: 0.2s;
         }
-        .input::placeholder { color: #95a5a6; }
+        .input:focus { border-color: var(--primary); }
 
-        /* Panels */
         .panel { 
-            background: var(--panel-bg); border: 2px solid var(--panel-border); border-radius: 20px; 
-            padding: 20px; backdrop-filter: blur(5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: var(--panel-bg); border: 3px solid var(--border-color); border-radius: 20px; 
+            padding: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.5);
         }
 
         .view { display: none; height: 100%; width: 100%; position: absolute; top: 0; left: 0; flex-direction: column; align-items: center; justify-content: center;}
-        .view.active { display: flex; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        @keyframes popIn { 0% { opacity: 0; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+        .view.active { display: flex; animation: fadeIn 0.3s forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 
-        /* --- LOGIN & LOBBY --- */
-        .logo { font-size: 4.5rem; color: white; -webkit-text-stroke: 2px var(--bg-dark); text-shadow: 4px 4px 0 var(--bg-dark); margin-bottom: 20px; text-align: center; }
-        .center-box { max-width: 450px; width: 90%; text-align: center; }
+        /* --- MENUS --- */
+        .logo { font-size: 5rem; color: var(--text-main); text-shadow: 0 6px 0 var(--primary), 0 12px 25px rgba(0,0,0,0.5); margin-bottom: 30px; text-align: center; }
+        .center-box { max-width: 500px; width: 90%; text-align: center; }
         
-        .lobby-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; max-width: 900px; width: 95%; height: 80vh; }
-        .player-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 50vh; margin-top: 15px;}
-        .player-card { background: white; color: var(--ui-text); padding: 12px 15px; border-radius: 12px; border-bottom: 4px solid #ccc; display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 1.1rem;}
-        .status-dot { height: 15px; width: 15px; border-radius: 50%; background: var(--btn-red); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2); }
-        .status-dot.ready { background: var(--btn-green); }
+        .lobby-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; max-width: 1000px; width: 95%; height: 75vh; }
+        .player-list { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 50vh; margin-top: 15px;}
+        .player-card { background: var(--panel-bg-hover); padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 1.2rem; border-left: 6px solid var(--danger); }
+        .player-card.ready { border-left-color: var(--success); }
 
-        .settings-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; margin-bottom: 10px; }
-        .settings-row input[type=range] { width: 120px; accent-color: var(--accent-pink); }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-color); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 800;}
+        .setting-row input[type=range] { width: 130px; accent-color: var(--primary); }
 
-        /* --- DRAWING INTERFACE --- */
-        #view-draw { padding: 15px; justify-content: flex-start; }
+        /* --- DRAWING UI (Advanced & Visible) --- */
+        #view-draw { display: none; grid-template-columns: 90px 1fr 280px; grid-template-rows: 70px 1fr; height: 100vh; background: var(--bg-color); }
+        #view-draw.active { display: grid; }
         
         /* Top Bar */
-        .draw-top { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 1200px; margin-bottom: 10px; }
-        .round-info { background: var(--bg-dark); padding: 8px 20px; border-radius: 20px; font-size: 1.2rem; border: 2px solid rgba(255,255,255,0.2); }
-        .timer-circle { background: var(--bg-dark); border: 4px solid var(--accent-pink); width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 900; box-shadow: 0 0 15px var(--accent-pink); }
+        .top-bar { grid-column: 1 / 4; grid-row: 1; background: var(--panel-bg); border-bottom: 3px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 50; }
+        .theme-display { font-size: 2rem; font-weight: 900; color: var(--warning); text-shadow: 0 3px 0 rgba(0,0,0,0.5); letter-spacing: 2px;}
+        .timer { font-size: 2rem; font-weight: 900; background: var(--bg-color); padding: 5px 20px; border-radius: 12px; border: 2px solid var(--border-color); }
 
-        /* Main Drawing Area Grid */
-        .draw-workspace { display: grid; grid-template-columns: 80px 1fr 80px; gap: 15px; width: 100%; max-width: 1200px; height: 80vh; }
+        /* Left Toolbar */
+        .toolbar-left { grid-column: 1; grid-row: 2; background: var(--panel-bg); border-right: 3px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 15px 0; gap: 10px; z-index: 40; overflow-y: auto;}
+        .tool-btn { width: 60px; height: 60px; border-radius: 15px; border: 3px solid transparent; background: var(--panel-bg-hover); color: var(--text-main); font-size: 1.5rem; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; position: relative;}
+        .tool-btn:hover { background: var(--primary); }
+        .tool-btn.active { background: var(--primary); border-color: white; box-shadow: 0 0 15px rgba(58, 134, 255, 0.6); }
+        .shortcut { position: absolute; bottom: 2px; right: 4px; font-size: 0.7rem; font-weight: 900; opacity: 0.7; }
+        .tool-divider { height: 3px; width: 60%; background: var(--border-color); margin: 5px 0; }
+
+        /* Canvas Workspace (Pan/Zoom supported) */
+        .canvas-area { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; background: #070b19; cursor: crosshair; }
+        #workspace { position: absolute; transform-origin: 0 0; background: white; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        canvas { position: absolute; top: 0; left: 0; }
         
-        /* Left: Palette */
-        .tool-panel { background: #b02a4b; /* Gartic red tint behind tools */ background: var(--panel-bg); border-radius: 15px; padding: 10px; display: flex; flex-direction: column; gap: 8px; border: 2px solid var(--panel-border); overflow-y: auto;}
-        .palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .color-swatch { width: 100%; aspect-ratio: 1; border-radius: 8px; border: 3px solid rgba(0,0,0,0.2); cursor: pointer; transition: 0.1s; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2); }
-        .color-swatch:active, .color-swatch.active { transform: scale(0.9); border-color: white; }
+        #done-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(11, 19, 43, 0.9); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 
-        /* Center: Notebook Canvas */
-        .notebook-wrapper { display: flex; flex-direction: column; position: relative; }
-        .notebook-header { background: #3c1e70; background: var(--bg-dark); color: var(--btn-green); border-radius: 15px 15px 0 0; text-align: center; padding: 15px; font-size: 1.5rem; text-transform: uppercase; font-weight: 900; z-index: 2; border: 4px solid #231145; border-bottom: none; }
-        .notebook-canvas { background: white; flex: 1; border-radius: 0 0 15px 15px; position: relative; overflow: hidden; border: 4px solid #231145; cursor: crosshair; box-shadow: 0 15px 0 rgba(0,0,0,0.1); display: flex;}
-        canvas { touch-action: none; width: 100%; height: 100%; object-fit: contain; background: white; }
+        /* Right Panel (Properties & Layers) */
+        .toolbar-right { grid-column: 3; grid-row: 2; background: var(--panel-bg); border-left: 3px solid var(--border-color); display: flex; flex-direction: column; z-index: 40; }
         
-        /* Notebook Rings Overlay */
-        .notebook-rings { position: absolute; top: -10px; left: 0; width: 100%; height: 30px; display: flex; justify-content: space-evenly; pointer-events: none; z-index: 3;}
-        .ring { width: 15px; height: 35px; background: #e0e0e0; border-radius: 10px; border: 2px solid #999; box-shadow: inset 0 -5px 0 rgba(0,0,0,0.2), 2px 5px 5px rgba(0,0,0,0.3); }
-
-        /* Early Submit Overlay */
-        #wait-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.9); z-index: 10; display: none; flex-direction: column; align-items: center; justify-content: center; color: var(--bg-dark); text-align: center; }
-        #wait-overlay i { font-size: 4rem; color: var(--btn-green); margin-bottom: 15px; animation: bounce 1s infinite; }
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-
-        /* Right: Tools */
-        .tool-btn { 
-            background: #d37388; background: var(--bg-light); color: white; border: none; border-bottom: 4px solid var(--bg-dark);
-            border-radius: 10px; width: 100%; aspect-ratio: 1; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative;
-        }
-        .tool-btn:active, .tool-btn.active { border-bottom-width: 0px; transform: translateY(4px); margin-bottom: 4px; background: var(--accent-pink); }
-        .tool-shortcut { position: absolute; top: 3px; right: 4px; font-size: 0.6rem; font-weight: 900; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; }
-
-        /* Bottom Bar (Thickness & Submit) */
-        .draw-bottom { display: flex; gap: 15px; margin-top: 15px; width: 100%; max-width: 1200px; height: 70px; }
-        .thickness-panel { background: #962541; background: var(--panel-bg); flex: 1; border-radius: 15px; border: 2px solid var(--panel-border); display: flex; align-items: center; padding: 0 20px; gap: 15px; }
-        .size-btn { background: var(--bg-light); border: 3px solid rgba(0,0,0,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s;}
-        .size-btn:hover, .size-btn.active { background: white; }
-        .size-dot { background: var(--bg-dark); border-radius: 50%; pointer-events: none; }
+        .prop-section { padding: 20px; border-bottom: 3px solid var(--border-color); }
+        .prop-section h3 { margin-bottom: 15px; font-size: 1rem; color: var(--text-muted); }
+        .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .slider-row input[type=range] { flex: 1; accent-color: var(--primary); height: 8px; }
+        .slider-val { background: var(--bg-color); padding: 4px 8px; border-radius: 6px; font-weight: 800; min-width: 45px; text-align: center; }
         
-        #btn-done { flex: 0.5; height: 100%; font-size: 1.5rem; margin: 0; }
+        .color-picker-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        input[type="color"] { -webkit-appearance: none; border: 3px solid var(--border-color); width: 50px; height: 50px; border-radius: 12px; cursor: pointer; background: none; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+        
+        .palette-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+        .swatch { aspect-ratio: 1; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.1s; }
+        .swatch:hover, .swatch.active { border-color: white; transform: scale(1.1); }
+
+        .layers-section { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .layer-card { background: var(--bg-color); border: 2px solid var(--border-color); padding: 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .layer-card.active { border-color: var(--primary); background: rgba(58, 134, 255, 0.2); }
+        .layer-card i { cursor: pointer; color: var(--text-muted); transition: 0.2s; }
+        .layer-card i:hover { color: white; }
 
         /* --- VOTING & RESULTS --- */
-        .vote-img-container { background: white; padding: 15px; border-radius: 15px; border: 5px solid var(--bg-dark); box-shadow: 0 20px 0 rgba(0,0,0,0.2); margin: 20px 0; max-width: 800px; width: 90%; }
-        .vote-img { width: 100%; border-radius: 5px; object-fit: contain; max-height: 50vh; }
-        .stars { display: flex; gap: 10px; }
-        .star-btn { font-size: 4rem; color: rgba(255,255,255,0.3); background: none; border: none; cursor: pointer; transition: 0.1s; text-shadow: 0 5px 0 rgba(0,0,0,0.2); }
-        .star-btn:hover, .star-btn.active { color: #FFD54F; transform: scale(1.1) rotate(5deg); text-shadow: 0 5px 0 #FF6F00; }
+        .vote-img-box { background: white; padding: 15px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin: 30px 0; max-width: 900px; width: 90%; }
+        .vote-img { width: 100%; border-radius: 10px; object-fit: contain; max-height: 60vh; }
+        .stars { display: flex; gap: 15px; }
+        .star-btn { font-size: 5rem; color: var(--panel-bg-hover); background: none; border: none; cursor: pointer; transition: 0.2s; text-shadow: 0 5px 0 rgba(0,0,0,0.3); }
+        .star-btn:hover, .star-btn.active { color: var(--warning); transform: scale(1.1); }
 
-        .podium { display: flex; align-items: flex-end; justify-content: center; gap: 15px; height: 50vh; margin-top: 40px; }
-        .podium-place { display: flex; flex-direction: column; align-items: center; width: 220px; }
-        .podium-art { width: 100%; aspect-ratio: 4/3; object-fit: cover; border: 4px solid white; border-radius: 10px; margin-bottom: -10px; z-index: 2; box-shadow: 0 10px 20px rgba(0,0,0,0.4); background: white;}
-        .podium-step { width: 100%; border-radius: 15px 15px 0 0; display: flex; flex-direction: column; align-items: center; padding-top: 25px; color: white; font-weight: 900; font-size: 2rem; border: 3px solid rgba(0,0,0,0.2); border-bottom: none;}
-        .place-1 .podium-step { height: 250px; background: #FFD54F; text-shadow: 0 3px 0 #FF6F00; }
-        .place-2 .podium-step { height: 180px; background: #E0E0E0; color: #757575; text-shadow: 0 3px 0 #9E9E9E; }
-        .place-3 .podium-step { height: 130px; background: #FF8A65; text-shadow: 0 3px 0 #D84315; }
+        .podium { display: flex; align-items: flex-end; justify-content: center; gap: 20px; height: 50vh; margin-top: 40px; }
+        .podium-place { display: flex; flex-direction: column; align-items: center; width: 250px; }
+        .podium-art { width: 100%; aspect-ratio: 4/3; object-fit: cover; border: 6px solid white; border-radius: 15px; margin-bottom: -15px; z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,0.6); background: white;}
+        .podium-step { width: 100%; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; align-items: center; padding-top: 30px; color: var(--bg-color); font-weight: 900; font-size: 2.5rem; }
+        .place-1 .podium-step { height: 280px; background: var(--warning); }
+        .place-2 .podium-step { height: 200px; background: #ced4da; }
+        .place-3 .podium-step { height: 140px; background: #e29578; }
     </style>
 </head>
 <body>
 
     <!-- 1. LOGIN SCREEN -->
     <div id="view-login" class="view active">
-        <h1 class="logo">FLASH DRAW!</h1>
+        <h1 class="logo"><i class="fa-solid fa-paintbrush"></i> FLASH DRAW!</h1>
         <div class="panel center-box">
-            <h2 style="margin-bottom: 20px;">CHOOSE A NICKNAME</h2>
-            <input type="text" id="player-name" class="input" placeholder="e.g. Picasso" maxlength="12" style="margin-bottom: 20px;">
-            <button class="btn green" onclick="Game.createRoom()" style="margin-bottom: 15px;"><i class="fa-solid fa-plus"></i> CREATE ROOM</button>
+            <h2>ENTER NICKNAME</h2>
+            <input type="text" id="player-name" class="input" placeholder="Your Name" maxlength="12" style="margin: 20px 0;">
+            <button class="btn green" onclick="Game.createRoom()" style="margin-bottom: 15px;"><i class="fa-solid fa-plus"></i> CREATE LOBBY</button>
             <div style="display:flex; gap:10px;">
                 <input type="text" id="room-code-input" class="input" placeholder="CODE" maxlength="6" style="text-transform: uppercase;">
-                <button class="btn" onclick="Game.joinRoom()"><i class="fa-solid fa-play"></i> JOIN</button>
+                <button class="btn" onclick="Game.joinRoom()"><i class="fa-solid fa-arrow-right"></i> JOIN</button>
             </div>
         </div>
     </div>
 
     <!-- 2. LOBBY SCREEN -->
     <div id="view-lobby" class="view">
-        <h1 class="logo" style="font-size: 3rem; margin-bottom: 10px;">ROOM: <span id="lobby-code" style="color:var(--btn-green)">XXXXXX</span></h1>
-        <div class="lobby-layout">
+        <h1 class="logo" style="font-size: 3.5rem; margin-bottom: 15px;">ROOM: <span id="lobby-code" style="color:var(--success)"></span></h1>
+        <div class="lobby-grid">
             <div class="panel" style="display:flex; flex-direction:column;">
                 <h2><i class="fa-solid fa-gear"></i> SETTINGS</h2>
-                <div id="settings-area" style="margin-top:20px; opacity:0.6; pointer-events:none;">
-                    <div class="settings-row">
+                <div id="settings-area" style="margin-top:20px; opacity:0.5; pointer-events:none;">
+                    <div class="setting-row">
                         <span>Time (<span id="lbl-time">3</span>m)</span>
-                        <input type="range" id="set-time" min="1" max="5" value="3" onchange="Game.updateSettings()">
+                        <input type="range" id="set-time" min="1" max="10" value="3" onchange="Game.updateSettings()">
                     </div>
-                    <div class="settings-row">
+                    <div class="setting-row">
                         <span>Players (<span id="lbl-players">8</span>)</span>
                         <input type="range" id="set-players" min="2" max="16" value="8" onchange="Game.updateSettings()">
                     </div>
@@ -187,94 +171,114 @@
             <div class="panel" style="display:flex; flex-direction:column;">
                 <h2><i class="fa-solid fa-users"></i> PLAYERS</h2>
                 <div class="player-list" id="player-list"></div>
-                <div style="margin-top:auto; padding-top:20px;">
-                    <button class="btn green" id="btn-ready" onclick="Game.toggleReady()">READY UP!</button>
-                    <button class="btn red" id="btn-start" onclick="Game.startGame()" style="display:none;">START GAME!</button>
+                <div style="margin-top:auto; padding-top:20px; display:flex; gap:15px;">
+                    <button class="btn green" id="btn-ready" onclick="Game.toggleReady()">READY UP</button>
+                    <button class="btn red" id="btn-start" onclick="Game.startGame()" style="display:none;">START MATCH</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 3. DRAWING SCREEN -->
+    <!-- 3. DRAWING SCREEN (ADVANCED) -->
     <div id="view-draw" class="view">
-        <div class="draw-top">
-            <div class="round-info"><i class="fa-solid fa-palette"></i> DRAWING PHASE</div>
-            <div class="timer-circle" id="game-timer">--</div>
-        </div>
-
-        <div class="draw-workspace">
-            <!-- Colors -->
-            <div class="tool-panel palette-grid" id="color-palette">
-                <!-- JS injected colors -->
-            </div>
-
-            <!-- Canvas -->
-            <div class="notebook-wrapper">
-                <div class="notebook-rings">
-                    <div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div>
-                    <div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div>
-                </div>
-                <div class="notebook-header">
-                    <span style="color:var(--ui-white); font-size:1rem; display:block;">HEY, IT'S TIME TO DRAW:</span>
-                    <span id="game-theme" style="font-size:2.2rem; color:var(--btn-green); text-shadow: 0 4px 0 rgba(0,0,0,0.5);">THEME</span>
-                </div>
-                <div class="notebook-canvas" id="canvas-container">
-                    <canvas id="main-canvas" width="1000" height="700"></canvas>
-                    
-                    <!-- Submitted Overlay -->
-                    <div id="wait-overlay">
-                        <i class="fa-solid fa-check-circle"></i>
-                        <h1>AWESOME!</h1>
-                        <h2 style="color:#7f8c8d; font-size:1.5rem; margin-top:10px;">Waiting for other players...</h2>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tools -->
-            <div class="tool-panel">
-                <button class="tool-btn active" onclick="DrawEngine.setTool('pencil')" id="tool-pencil">
-                    <i class="fa-solid fa-pencil"></i><span class="tool-shortcut">B</span>
-                </button>
-                <button class="tool-btn" onclick="DrawEngine.setTool('eraser')" id="tool-eraser">
-                    <i class="fa-solid fa-eraser"></i><span class="tool-shortcut">E</span>
-                </button>
-                <button class="tool-btn" onclick="DrawEngine.setTool('fill')" id="tool-fill">
-                    <i class="fa-solid fa-fill-drip"></i><span class="tool-shortcut">G</span>
-                </button>
-                <div style="height:2px; background:rgba(255,255,255,0.2); margin:5px 0;"></div>
-                <button class="tool-btn" onclick="DrawEngine.setTool('rect')" id="tool-rect">
-                    <i class="fa-regular fa-square"></i><span class="tool-shortcut">R</span>
-                </button>
-                <button class="tool-btn" onclick="DrawEngine.setTool('circle')" id="tool-circle">
-                    <i class="fa-regular fa-circle"></i><span class="tool-shortcut">C</span>
-                </button>
-                <button class="tool-btn" onclick="DrawEngine.setTool('line')" id="tool-line">
-                    <i class="fa-solid fa-minus"></i><span class="tool-shortcut">L</span>
-                </button>
-                <div style="height:2px; background:rgba(255,255,255,0.2); margin:5px 0;"></div>
-                <button class="tool-btn" onclick="DrawEngine.undo()">
-                    <i class="fa-solid fa-rotate-left"></i><span class="tool-shortcut">Z</span>
-                </button>
-                <button class="tool-btn" onclick="DrawEngine.clearCanvas()" style="background:var(--btn-red);">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="draw-bottom">
-            <div class="thickness-panel" id="size-panel">
-                <!-- Sizes injected via JS -->
-            </div>
-            <button class="btn green" id="btn-done" onclick="Game.submitEarly()">
+        <div class="top-bar">
+            <div class="timer" id="game-timer">00:00</div>
+            <div class="theme-display" id="game-theme">THEME</div>
+            <button class="btn green" id="btn-done" style="width: auto;" onclick="Game.submitEarly()">
                 <i class="fa-solid fa-check"></i> DONE!
             </button>
+        </div>
+
+        <div class="toolbar-left">
+            <button class="tool-btn active" title="Pencil (B)" onclick="DrawEngine.setTool('pencil')" id="tool-pencil">
+                <i class="fa-solid fa-pencil"></i><span class="shortcut">B</span>
+            </button>
+            <button class="tool-btn" title="Marker" onclick="DrawEngine.setTool('marker')" id="tool-marker">
+                <i class="fa-solid fa-highlighter"></i>
+            </button>
+            <button class="tool-btn" title="Airbrush" onclick="DrawEngine.setTool('airbrush')" id="tool-airbrush">
+                <i class="fa-solid fa-spray-can"></i>
+            </button>
+            <button class="tool-btn" title="Eraser (E)" onclick="DrawEngine.setTool('eraser')" id="tool-eraser">
+                <i class="fa-solid fa-eraser"></i><span class="shortcut">E</span>
+            </button>
+            <button class="tool-btn" title="Fill (G)" onclick="DrawEngine.setTool('fill')" id="tool-fill">
+                <i class="fa-solid fa-fill-drip"></i><span class="shortcut">G</span>
+            </button>
+            
+            <div class="tool-divider"></div>
+            
+            <button class="tool-btn" title="Line (L)" onclick="DrawEngine.setTool('line')" id="tool-line">
+                <i class="fa-solid fa-minus"></i><span class="shortcut">L</span>
+            </button>
+            <button class="tool-btn" title="Rectangle (R)" onclick="DrawEngine.setTool('rect')" id="tool-rect">
+                <i class="fa-regular fa-square"></i><span class="shortcut">R</span>
+            </button>
+            <button class="tool-btn" title="Circle (C)" onclick="DrawEngine.setTool('circle')" id="tool-circle">
+                <i class="fa-regular fa-circle"></i><span class="shortcut">C</span>
+            </button>
+            
+            <div class="tool-divider"></div>
+            
+            <button class="tool-btn" title="Pan (Space)" onclick="DrawEngine.setTool('pan')" id="tool-pan">
+                <i class="fa-solid fa-hand"></i><span class="shortcut">✋</span>
+            </button>
+            <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="DrawEngine.undo()">
+                <i class="fa-solid fa-rotate-left"></i><span class="shortcut">Z</span>
+            </button>
+            <button class="tool-btn" title="Clear Canvas" onclick="DrawEngine.clearCanvas()" style="background:var(--danger); margin-top:auto;">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+
+        <div class="canvas-area" id="canvas-wrap">
+            <div id="workspace"></div>
+            
+            <div id="done-overlay">
+                <i class="fa-solid fa-circle-check" style="font-size: 6rem; color: var(--success); margin-bottom: 20px;"></i>
+                <h1>SUBMITTED!</h1>
+                <h2 style="color:var(--text-muted); margin-top:10px;">Waiting for other players...</h2>
+            </div>
+        </div>
+
+        <div class="toolbar-right">
+            <div class="prop-section">
+                <h3>BRUSH SETTINGS</h3>
+                <div class="slider-row">
+                    <i class="fa-solid fa-circle" style="font-size:0.8rem"></i>
+                    <input type="range" id="prop-size" min="1" max="150" value="8" oninput="DrawEngine.updateProps()">
+                    <div class="slider-val" id="val-size">8</div>
+                </div>
+                <div class="slider-row">
+                    <i class="fa-solid fa-eye-dropper" style="font-size:0.8rem"></i>
+                    <input type="range" id="prop-opacity" min="1" max="100" value="100" oninput="DrawEngine.updateProps()">
+                    <div class="slider-val" id="val-opacity">100</div>
+                </div>
+            </div>
+            
+            <div class="prop-section">
+                <h3>COLORS</h3>
+                <div class="color-picker-row">
+                    <input type="color" id="color-picker" value="#000000" onchange="DrawEngine.updateProps()">
+                    <button class="btn" style="padding:10px; flex:1; font-size:1rem;" onclick="DrawEngine.setColor('#FFFFFF')">WHITE</button>
+                </div>
+                <div class="palette-grid" id="color-palette"></div>
+            </div>
+            
+            <div class="layers-section">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>LAYERS</h3>
+                    <button class="btn" style="padding:6px 12px; width:auto;" onclick="DrawEngine.addLayer()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="layer-list" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
+            </div>
         </div>
     </div>
 
     <!-- 4. VOTING SCREEN -->
     <div id="view-vote" class="view">
         <h1 id="vote-title" style="font-size: 3rem;">RATE THIS DRAWING!</h1>
-        <div class="vote-img-container">
+        <div class="vote-img-box">
             <img id="vote-image" class="vote-img" src="">
         </div>
         <div class="stars" id="star-container">
@@ -288,7 +292,7 @@
 
     <!-- 5. RESULTS SCREEN -->
     <div id="view-results" class="view">
-        <h1 style="font-size: 4rem; color:var(--btn-green);">WINNERS!</h1>
+        <h1 style="font-size: 4rem; color:var(--success); text-shadow: 0 5px 0 #04a077;">WINNERS!</h1>
         <div class="podium" id="podium-container"></div>
     </div>
 
@@ -296,120 +300,70 @@
         const socket = io();
 
         /* =========================================
-           UI GENERATION
+           UI GENERATION & GAME LOGIC
         ========================================= */
         const UI = {
             showView: (id) => {
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
                 document.getElementById(id).classList.add('active');
+                if(id === 'view-draw') DrawEngine.resize();
             },
             initColors: () => {
-                // Gartic style fixed palette
                 const colors = [
-                    '#000000', '#555555', '#AAAAAA', '#FFFFFF', 
-                    '#FF0000', '#FF8800', '#FFCC00', '#00CC00',
-                    '#0088FF', '#0000CC', '#8800CC', '#FF00CC',
-                    '#8B4513', '#D2691E', '#F5DEB3', '#FFB6C1',
-                    '#00FA9A', '#00CED1', '#4682B4', '#4B0082'
+                    '#000000', '#4a4a4a', '#ff0000', '#ff7f00', '#ffff00', 
+                    '#00ff00', '#0000ff', '#4b0082', '#9400d3', '#ff1493',
+                    '#8b4513', '#d2691e', '#20b2aa', '#00ced1', '#1e90ff'
                 ];
                 const grid = document.getElementById('color-palette');
-                colors.forEach((c, i) => {
+                colors.forEach(c => {
                     const el = document.createElement('div');
-                    el.className = `color-swatch ${i===0?'active':''}`;
+                    el.className = 'swatch';
                     el.style.backgroundColor = c;
-                    el.onclick = (e) => {
-                        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-                        e.target.classList.add('active');
-                        DrawEngine.setColor(c);
-                    };
+                    el.onclick = () => DrawEngine.setColor(c);
                     grid.appendChild(el);
-                });
-            },
-            initSizes: () => {
-                const sizes = [5, 12, 25, 40, 60];
-                const panel = document.getElementById('size-panel');
-                sizes.forEach((s, i) => {
-                    const btn = document.createElement('div');
-                    btn.className = `size-btn ${i===1?'active':''}`;
-                    btn.style.width = '45px'; btn.style.height = '45px';
-                    
-                    const dot = document.createElement('div');
-                    dot.className = 'size-dot';
-                    dot.style.width = Math.min(s, 35) + 'px';
-                    dot.style.height = Math.min(s, 35) + 'px';
-                    
-                    btn.appendChild(dot);
-                    btn.onclick = (e) => {
-                        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        DrawEngine.setSize(s);
-                    };
-                    panel.appendChild(btn);
                 });
             }
         };
 
-        /* =========================================
-           MULTIPLAYER GAME LOGIC
-        ========================================= */
         const Game = {
             code: '', isOwner: false, voteTargetId: null, timerInterval: null, hasSubmitted: false,
 
-            createRoom: () => {
-                const name = document.getElementById('player-name').value.trim() || 'Player';
-                socket.emit('create_room', { name });
-            },
+            createRoom: () => socket.emit('create_room', { name: document.getElementById('player-name').value.trim() || 'Player' }),
             joinRoom: () => {
-                const name = document.getElementById('player-name').value.trim() || 'Player';
                 const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-                if(code.length === 6) socket.emit('join_room', { code, name });
+                if(code.length === 6) socket.emit('join_room', { code, name: document.getElementById('player-name').value.trim() || 'Player' });
             },
             toggleReady: () => socket.emit('toggle_ready', Game.code),
-            
             updateSettings: () => {
                 if(!Game.isOwner) return;
-                const set = {
-                    roundTime: document.getElementById('set-time').value,
-                    maxPlayers: document.getElementById('set-players').value,
-                    voteTime: 10
-                };
+                const set = { roundTime: document.getElementById('set-time').value, maxPlayers: document.getElementById('set-players').value, voteTime: 10 };
                 document.getElementById('lbl-time').innerText = set.roundTime;
                 document.getElementById('lbl-players').innerText = set.maxPlayers;
                 socket.emit('update_settings', { code: Game.code, settings: set });
             },
-            
             startGame: () => socket.emit('start_game', Game.code),
-
+            
             submitEarly: () => {
                 if(Game.hasSubmitted) return;
                 Game.hasSubmitted = true;
-                document.getElementById('btn-done').style.background = 'var(--panel-bg)';
-                document.getElementById('btn-done').style.pointerEvents = 'none';
-                document.getElementById('btn-done').innerText = 'WAITING...';
-                
-                document.getElementById('wait-overlay').style.display = 'flex';
-                
-                const img = DrawEngine.getFinalImage();
-                socket.emit('submit_drawing', { code: Game.code, image: img });
+                document.getElementById('done-overlay').style.display = 'flex';
+                socket.emit('submit_drawing', { code: Game.code, image: DrawEngine.getFinalImage() });
             },
-
             submitVote: (stars) => {
                 if(!Game.voteTargetId) return;
                 socket.emit('submit_vote', { code: Game.code, authorId: Game.voteTargetId, stars });
                 document.querySelectorAll('.star-btn').forEach((btn, i) => {
-                    btn.style.color = i < stars ? '#FFD54F' : 'rgba(255,255,255,0.3)';
+                    btn.style.color = i < stars ? 'var(--warning)' : 'var(--panel-bg-hover)';
                     btn.style.pointerEvents = 'none';
                 });
             }
         };
 
         socket.on('error_msg', msg => alert(msg));
-        
         socket.on('room_joined', data => {
             Game.code = data.code; Game.isOwner = data.isOwner;
             document.getElementById('lobby-code').innerText = data.code;
             UI.showView('view-lobby');
-            
             if(Game.isOwner) {
                 document.getElementById('settings-area').style.pointerEvents = 'auto';
                 document.getElementById('settings-area').style.opacity = 1;
@@ -424,28 +378,16 @@
             let allReady = true;
             players.forEach(p => {
                 if(!p.ready) allReady = false;
-                list.innerHTML += `
-                    <div class="player-card">
-                        <span>${p.name} ${p.id === socket.id ? '(YOU)' : ''}</span>
-                        <div class="status-dot ${p.ready ? 'ready' : ''}"></div>
-                    </div>`;
+                list.innerHTML += `<div class="player-card ${p.ready ? 'ready' : ''}"><span>${p.name} ${p.id === socket.id ? '(YOU)' : ''}</span><i class="fa-solid fa-${p.ready ? 'check' : 'xmark'}" style="color:var(--${p.ready ? 'success' : 'danger'})"></i></div>`;
             });
-            if(Game.isOwner && players.length > 1) {
-                document.getElementById('btn-start').disabled = !allReady;
-                document.getElementById('btn-start').style.opacity = allReady ? 1 : 0.5;
-            }
+            if(Game.isOwner && players.length > 1) document.getElementById('btn-start').disabled = !allReady;
         });
 
         socket.on('game_started', data => {
             UI.showView('view-draw');
             document.getElementById('game-theme').innerText = data.theme;
-            
-            // Reset state
             Game.hasSubmitted = false;
-            document.getElementById('wait-overlay').style.display = 'none';
-            document.getElementById('btn-done').style.background = 'var(--btn-green)';
-            document.getElementById('btn-done').style.pointerEvents = 'auto';
-            document.getElementById('btn-done').innerHTML = '<i class="fa-solid fa-check"></i> DONE!';
+            document.getElementById('done-overlay').style.display = 'none';
             
             DrawEngine.init();
 
@@ -453,17 +395,15 @@
             clearInterval(Game.timerInterval);
             Game.timerInterval = setInterval(() => {
                 timeLeft--;
-                document.getElementById('game-timer').innerText = timeLeft > 0 ? timeLeft : 0;
-                // Client side timer is visual only. Server forces submission.
+                const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const s = (timeLeft % 60).toString().padStart(2, '0');
+                document.getElementById('game-timer').innerText = `${m}:${s}`;
             }, 1000);
         });
 
-        // Server requested a forced submission because timer ran out
         socket.on('force_submit', () => {
             clearInterval(Game.timerInterval);
-            if(!Game.hasSubmitted) {
-                Game.submitEarly(); // Auto submit what they have
-            }
+            if(!Game.hasSubmitted) Game.submitEarly();
         });
 
         socket.on('start_vote', data => {
@@ -480,7 +420,7 @@
                 title.innerText = "RATE THIS DRAWING!";
                 document.getElementById('star-container').style.display = 'flex';
                 document.querySelectorAll('.star-btn').forEach(btn => {
-                    btn.style.color = 'rgba(255,255,255,0.3)';
+                    btn.style.color = 'var(--panel-bg-hover)';
                     btn.style.pointerEvents = 'auto';
                 });
             }
@@ -491,69 +431,133 @@
             const p = document.getElementById('podium-container');
             p.innerHTML = '';
             
-            const layout = [
-                { class: 'place-2', title: '2ND', data: top3[1] },
-                { class: 'place-1', title: '1ST', data: top3[0] },
-                { class: 'place-3', title: '3RD', data: top3[2] }
-            ];
-
+            const layout = [{ class: 'place-2', title: '2ND', data: top3[1] }, { class: 'place-1', title: '1ST', data: top3[0] }, { class: 'place-3', title: '3RD', data: top3[2] }];
             layout.forEach(pos => {
                 if(pos.data) {
                     p.innerHTML += `
                     <div class="podium-place ${pos.class}">
                         <img class="podium-art" src="${pos.data.image}">
                         <div class="podium-step">
-                            <span style="font-size:1.2rem; margin-bottom:5px;">${pos.data.name}</span>
+                            <span style="font-size:1.5rem; margin-bottom:5px;">${pos.data.name}</span>
                             ${pos.title}
-                            <span style="font-size:1rem; font-weight:700;">${pos.data.score} ⭐</span>
+                            <span style="font-size:1.2rem; font-weight:700;">${pos.data.score} ⭐</span>
                         </div>
                     </div>`;
                 }
             });
 
-            const duration = 8000;
-            const end = Date.now() + duration;
+            const duration = 10000, end = Date.now() + duration;
             (function frame() {
-                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#FFD54F', '#29B6F6', '#FF4081'] });
-                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#FFD54F', '#29B6F6', '#FF4081'] });
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#3a86ff', '#ff006e', '#ffd166'] });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#3a86ff', '#ff006e', '#ffd166'] });
                 if (Date.now() < end) requestAnimationFrame(frame);
             }());
         });
 
-        socket.on('return_to_lobby', () => {
-            UI.showView('view-lobby');
-            socket.emit('toggle_ready', Game.code); // Unready everyone
-            socket.emit('toggle_ready', Game.code); // Quick hack to force state update without backend change
-        });
+        socket.on('return_to_lobby', () => { UI.showView('view-lobby'); socket.emit('toggle_ready', Game.code); socket.emit('toggle_ready', Game.code); });
 
 
         /* =========================================
-           GARTIC STYLE DRAWING ENGINE
+           ADVANCED DRAWING ENGINE
         ========================================= */
         const DrawEngine = {
-            canvas: document.getElementById('main-canvas'),
-            ctx: document.getElementById('main-canvas').getContext('2d', { willReadFrequently: true }),
-            width: 1000, height: 700,
+            width: 1920, height: 1080,
+            layers: [], activeLayer: 0, history: [],
+            tool: 'pencil', color: '#000000', size: 8, opacity: 1,
             
-            tool: 'pencil', color: '#000000', size: 12,
-            isDrawing: false, lastX: 0, lastY: 0, startX: 0, startY: 0,
-            history: [], redoStack: [], previewData: null,
+            // Viewport
+            scale: 1, panX: 0, panY: 0, isPanning: false,
+            
+            // Interaction State
+            isDrawing: false, lastPos: null, startPos: null, previewData: null,
+            airbrushRAF: null, // Request animation frame for continuous airbrush
+            
+            // DOM
+            workspace: document.getElementById('workspace'),
+            wrap: document.getElementById('canvas-wrap'),
 
             init: function() {
-                this.ctx.lineCap = 'round';
-                this.ctx.lineJoin = 'round';
-                this.clearCanvas(true); // pure white
-                this.history = [];
-                this.saveState();
+                this.workspace.innerHTML = '';
+                this.layers = []; this.history = [];
+                this.workspace.style.width = this.width + 'px';
+                this.workspace.style.height = this.height + 'px';
                 
-                // Remove old listeners to prevent stacking
-                this.canvas.onpointerdown = this.down.bind(this);
+                this.addLayer("Background", true);
+                this.fillCanvas('#ffffff');
+                this.addLayer("Layer 1");
+
+                // Center canvas visually
+                const rect = this.wrap.getBoundingClientRect();
+                this.scale = Math.min(rect.width / this.width, rect.height / this.height) * 0.9;
+                this.panX = (rect.width - (this.width * this.scale)) / 2;
+                this.panY = (rect.height - (this.height * this.scale)) / 2;
+                this.updateTransform();
+
+                this.setupEvents();
+                this.updateLayerUI();
+                this.saveState();
+            },
+
+            addLayer: function(name = `Layer ${this.layers.length}`, isBg = false) {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.width; canvas.height = this.height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                this.workspace.appendChild(canvas);
+                this.layers.push({ name, canvas, ctx, visible: true, isBg });
+                this.activeLayer = this.layers.length - 1;
+                this.updateLayerUI();
+            },
+
+            updateLayerUI: function() {
+                const list = document.getElementById('layer-list');
+                list.innerHTML = '';
+                this.layers.forEach((l, i) => {
+                    const el = document.createElement('div');
+                    el.className = `layer-card ${i === this.activeLayer ? 'active' : ''}`;
+                    el.onclick = () => { this.activeLayer = i; this.updateLayerUI(); };
+                    el.innerHTML = `<span>${l.name}</span> <i class="fa-solid fa-eye${l.visible ? '' : '-slash'}" onclick="event.stopPropagation(); DrawEngine.toggleLayer(${i})"></i>`;
+                    list.appendChild(el);
+                });
+            },
+
+            toggleLayer: function(i) {
+                this.layers[i].visible = !this.layers[i].visible;
+                this.layers[i].canvas.style.display = this.layers[i].visible ? 'block' : 'none';
+                this.updateLayerUI();
+            },
+
+            updateTransform: function() {
+                this.workspace.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+            },
+            resize: function() { if(this.workspace) this.updateTransform(); },
+
+            getPos: function(e) {
+                const rect = this.workspace.getBoundingClientRect();
+                return { x: (e.clientX - rect.left) / this.scale, y: (e.clientY - rect.top) / this.scale };
+            },
+
+            setupEvents: function() {
+                this.wrap.onpointerdown = this.down.bind(this);
                 window.onpointermove = this.move.bind(this);
                 window.onpointerup = this.up.bind(this);
                 
+                this.wrap.onwheel = (e) => {
+                    if(Game.hasSubmitted) return;
+                    e.preventDefault();
+                    const delta = -e.deltaY * 0.001;
+                    const oldScale = this.scale;
+                    this.scale = Math.min(Math.max(0.1, this.scale + delta), 5);
+                    const rect = this.wrap.getBoundingClientRect();
+                    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                    this.panX = mx - (mx - this.panX) * (this.scale / oldScale);
+                    this.panY = my - (my - this.panY) * (this.scale / oldScale);
+                    this.updateTransform();
+                };
+
                 window.onkeydown = (e) => {
-                    if(document.getElementById('wait-overlay').style.display === 'flex') return;
-                    if(e.target.tagName === 'INPUT') return;
+                    if(Game.hasSubmitted || e.target.tagName === 'INPUT') return;
+                    if(e.code === 'Space') { this.isPanning = true; this.wrap.style.cursor = 'grab'; }
                     if(e.ctrlKey && e.code === 'KeyZ') this.undo();
                     if(e.code === 'KeyB') this.setTool('pencil');
                     if(e.code === 'KeyE') this.setTool('eraser');
@@ -562,91 +566,134 @@
                     if(e.code === 'KeyC') this.setTool('circle');
                     if(e.code === 'KeyL') this.setTool('line');
                 };
-            },
-
-            getPos: function(e) {
-                const rect = this.canvas.getBoundingClientRect();
-                // Map CSS size to internal canvas resolution
-                const scaleX = this.canvas.width / rect.width;
-                const scaleY = this.canvas.height / rect.height;
-                return {
-                    x: (e.clientX - rect.left) * scaleX,
-                    y: (e.clientY - rect.top) * scaleY
+                window.onkeyup = (e) => {
+                    if(e.code === 'Space') { this.isPanning = false; this.wrap.style.cursor = 'crosshair'; }
                 };
             },
 
             down: function(e) {
                 if(Game.hasSubmitted) return;
+                if(e.button === 1 || this.isPanning || this.tool === 'pan') {
+                    this.isPanning = true;
+                    this.startPos = { x: e.clientX - this.panX, y: e.clientY - this.panY };
+                    this.wrap.style.cursor = 'grabbing';
+                    return;
+                }
+
                 const pos = this.getPos(e);
                 this.isDrawing = true;
-                this.startX = pos.x; this.startY = pos.y;
-                this.lastX = pos.x; this.lastY = pos.y;
+                this.startPos = pos; this.lastPos = pos;
 
-                this.ctx.lineWidth = this.size;
-                this.ctx.strokeStyle = this.tool === 'eraser' ? '#FFFFFF' : this.color;
-                this.ctx.fillStyle = this.ctx.strokeStyle;
+                const layer = this.layers[this.activeLayer];
+                if(!layer.visible) return;
+                const ctx = layer.ctx;
+                
+                ctx.lineWidth = this.size;
+                ctx.strokeStyle = this.color; ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.globalCompositeOperation = 'source-over'; // default
+
+                if(this.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.globalAlpha = 1; // Erasers should be fully opaque typically
+                } else if(this.tool === 'marker') {
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.globalAlpha = this.opacity * 0.5;
+                }
 
                 if(this.tool === 'fill') {
                     this.floodFill(Math.floor(pos.x), Math.floor(pos.y));
                     this.isDrawing = false;
                     this.saveState();
+                } else if(this.tool === 'airbrush') {
+                    // Start continuous spray loop
+                    this.continuousAirbrush();
                 } else if(['rect', 'circle', 'line'].includes(this.tool)) {
-                    this.previewData = this.ctx.getImageData(0,0, this.width, this.height);
+                    this.previewData = ctx.getImageData(0,0, this.width, this.height);
                 } else {
-                    this.ctx.beginPath();
-                    this.ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2);
-                    this.ctx.fill();
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(pos.x, pos.y);
+                    ctx.beginPath(); ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
                 }
             },
 
             move: function(e) {
+                if(this.isPanning) {
+                    this.panX = e.clientX - this.startPos.x;
+                    this.panY = e.clientY - this.startPos.y;
+                    this.updateTransform();
+                    return;
+                }
                 if(!this.isDrawing) return;
                 const pos = this.getPos(e);
+                this.lastPos = pos; // Update last position for airbrush
+
+                const ctx = this.layers[this.activeLayer].ctx;
 
                 if(['rect', 'circle', 'line'].includes(this.tool)) {
-                    this.ctx.putImageData(this.previewData, 0, 0);
-                    this.ctx.beginPath();
-                    if(this.tool === 'rect') {
-                        this.ctx.rect(this.startX, this.startY, pos.x - this.startX, pos.y - this.startY);
-                    } else if(this.tool === 'circle') {
-                        const r = Math.sqrt(Math.pow(pos.x - this.startX, 2) + Math.pow(pos.y - this.startY, 2));
-                        this.ctx.arc(this.startX, this.startY, r, 0, Math.PI*2);
+                    ctx.putImageData(this.previewData, 0, 0);
+                    ctx.beginPath();
+                    if(this.tool === 'rect') ctx.rect(this.startPos.x, this.startPos.y, pos.x - this.startPos.x, pos.y - this.startPos.y);
+                    else if(this.tool === 'circle') {
+                        const r = Math.sqrt(Math.pow(pos.x - this.startPos.x, 2) + Math.pow(pos.y - this.startPos.y, 2));
+                        ctx.arc(this.startPos.x, this.startPos.y, r, 0, Math.PI*2);
                     } else if(this.tool === 'line') {
-                        this.ctx.moveTo(this.startX, this.startY);
-                        this.ctx.lineTo(pos.x, pos.y);
+                        ctx.moveTo(this.startPos.x, this.startPos.y); ctx.lineTo(pos.x, pos.y);
                     }
-                    this.ctx.stroke();
-                } else {
-                    this.ctx.lineTo(pos.x, pos.y);
-                    this.ctx.stroke();
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(pos.x, pos.y);
+                    ctx.stroke();
+                } else if (this.tool !== 'airbrush') {
+                    ctx.lineTo(pos.x, pos.y); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
                 }
             },
 
-            up: function() {
+            up: function(e) {
+                if(this.isPanning && e.button !== 1 && this.tool !== 'pan') this.isPanning = false;
                 if(!this.isDrawing) return;
                 this.isDrawing = false;
-                if(['rect', 'circle', 'line'].includes(this.tool)) this.ctx.stroke();
+                
+                // Stop airbrush loop
+                if (this.airbrushRAF) { cancelAnimationFrame(this.airbrushRAF); this.airbrushRAF = null; }
+
+                const ctx = this.layers[this.activeLayer].ctx;
+                if(['rect', 'circle', 'line'].includes(this.tool)) ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
                 this.saveState();
             },
 
+            // --- Real Continuous Airbrush ---
+            continuousAirbrush: function() {
+                if (!this.isDrawing) return;
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity * 0.1; // Very soft particles
+                
+                // Draw multiple particles per frame around the cursor
+                for (let i = 0; i < (this.size * 2); i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.random() * (this.size / 2);
+                    const x = this.lastPos.x + Math.cos(angle) * radius;
+                    const y = this.lastPos.y + Math.sin(angle) * radius;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+                
+                this.airbrushRAF = requestAnimationFrame(() => this.continuousAirbrush());
+            },
+
             floodFill: function(x, y) {
-                const imgData = this.ctx.getImageData(0,0,this.width,this.height);
+                const ctx = this.layers[this.activeLayer].ctx;
+                const imgData = ctx.getImageData(0,0,this.width,this.height);
                 const data = imgData.data;
                 const getIdx = (x,y) => (y * this.width + x) * 4;
                 const startIdx = getIdx(x, y);
-                const [r, g, b] = [data[startIdx], data[startIdx+1], data[startIdx+2]];
+                const [r, g, b, a] = [data[startIdx], data[startIdx+1], data[startIdx+2], data[startIdx+3]];
                 
                 const hex = this.tool === 'eraser' ? 'ffffff' : this.color.replace('#','');
                 const [fr, fg, fb] = [parseInt(hex.substring(0,2),16), parseInt(hex.substring(2,4),16), parseInt(hex.substring(4,6),16)];
 
-                if(r===fr && g===fg && b===fb) return;
+                if(r===fr && g===fg && b===fb && (a===255 || this.tool==='eraser')) return;
 
-                const match = (i) => data[i]===r && data[i+1]===g && data[i+2]===b;
-                const set = (i) => { data[i]=fr; data[i+1]=fg; data[i+2]=fb; data[i+3]=255; };
+                const match = (i) => data[i]===r && data[i+1]===g && data[i+2]===b && data[i+3]===a;
+                const set = (i) => { data[i]=fr; data[i+1]=fg; data[i+2]=fb; data[i+3]=this.tool==='eraser'?0:255; };
 
                 const stack = [[x, y]];
                 while(stack.length) {
@@ -669,44 +716,66 @@
                         cy++; idx += this.width*4;
                     }
                 }
-                this.ctx.putImageData(imgData, 0, 0);
+                ctx.putImageData(imgData, 0, 0);
             },
 
             saveState: function() {
-                this.history.push(this.ctx.getImageData(0,0,this.width,this.height));
+                const state = [];
+                this.layers.forEach(l => state.push(l.ctx.getImageData(0,0,this.width,this.height)));
+                this.history.push(state);
                 if(this.history.length > 20) this.history.shift();
             },
             undo: function() {
                 if(this.history.length > 1) {
                     this.history.pop();
-                    this.ctx.putImageData(this.history[this.history.length-1], 0, 0);
+                    const state = this.history[this.history.length-1];
+                    state.forEach((imgData, i) => this.layers[i].ctx.putImageData(imgData, 0, 0));
                 }
             },
-            clearCanvas: function(isInit=false) {
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.fillRect(0,0,this.width,this.height);
-                if(!isInit) this.saveState();
+            clearCanvas: function() {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.clearRect(0,0,this.width,this.height);
+                if(this.layers[this.activeLayer].isBg) this.fillCanvas('#ffffff');
+                this.saveState();
             },
+            fillCanvas: function(color) {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.fillStyle = color; ctx.fillRect(0,0,this.width,this.height);
+            },
+            
             setTool: function(t) {
                 this.tool = t;
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                 const btn = document.getElementById('tool-' + t);
                 if(btn) btn.classList.add('active');
+                this.wrap.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
             },
-            setColor: function(c) { this.color = c; if(this.tool==='eraser') this.setTool('pencil'); },
-            setSize: function(s) { this.size = s; },
+            setColor: function(c) { 
+                this.color = c; document.getElementById('color-picker').value = c; 
+                document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+                if(this.tool === 'eraser') this.setTool('pencil');
+            },
+            updateProps: function() {
+                this.size = parseInt(document.getElementById('prop-size').value);
+                this.opacity = parseInt(document.getElementById('prop-opacity').value) / 100;
+                this.color = document.getElementById('color-picker').value;
+                document.getElementById('val-size').innerText = this.size;
+                document.getElementById('val-opacity').innerText = Math.round(this.opacity*100);
+            },
             getFinalImage: function() {
-                // Downscale slightly for base64 transmit size
-                const out = document.createElement('canvas');
-                out.width = 800; out.height = 560; 
-                out.getContext('2d').drawImage(this.canvas, 0, 0, out.width, out.height);
-                return out.toDataURL('image/jpeg', 0.8);
+                const comp = document.createElement('canvas'); comp.width = this.width; comp.height = this.height;
+                const ctx = comp.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,this.width,this.height);
+                this.layers.forEach(l => { if(l.visible) ctx.drawImage(l.canvas, 0, 0); });
+                
+                const out = document.createElement('canvas'); out.width = 1280; out.height = 720;
+                out.getContext('2d').drawImage(comp, 0, 0, 1280, 720);
+                return out.toDataURL('image/jpeg', 0.85);
             }
         };
 
-        // Init UI
+        window.addEventListener('resize', () => DrawEngine.resize());
         UI.initColors();
-        UI.initSizes();
     </script>
 </body>
 </html>

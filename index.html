@@ -429,8 +429,22 @@
                         <div class="status ${p.ready ? 'ready' : ''}"></div>
                     </div>`;
             });
-            if(Game.isOwner && players.length > 1) {
+            
+            // Allow owner to start match if everyone is ready
+            if(Game.isOwner) {
                 document.getElementById('btn-start').disabled = !allReady;
+            }
+        });
+
+        // Listen for Host Migration
+        socket.on('new_owner', ownerId => {
+            if (socket.id === ownerId) {
+                Game.isOwner = true;
+                document.getElementById('lobby-settings').style.pointerEvents = 'auto';
+                document.getElementById('lobby-settings').style.opacity = 1;
+                document.getElementById('owner-notice').style.display = 'block';
+                document.getElementById('btn-start').style.display = 'block';
+                document.getElementById('btn-ready').style.display = 'none';
             }
         });
 
@@ -537,7 +551,7 @@
         socket.on('return_to_lobby', () => {
             UI.showView('view-lobby');
             document.querySelectorAll('.status').forEach(el => el.classList.remove('ready'));
-            if(Game.isOwner) document.getElementById('btn-start').disabled = true;
+            // Note: Update players logic will handle the UI state now, so no need to disable btn-start blindly
         });
 
 

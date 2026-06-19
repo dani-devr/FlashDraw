@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flash Draw!</title>
+    <!-- Tailwind for base utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Socket.io Client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Google Fonts for the striking neo-brutalist look -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --bw-border: 4px solid #000;
+            --bw-shadow: 6px 6px 0px #000;
+            --bw-shadow-hover: 2px 2px 0px #000;
+        }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #f0f0f0; /* Light gray background */
+            background-image: radial-gradient(#d1d1d1 2px, transparent 2px);
+            background-size: 32px 32px;
+            color: #000;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Neo-Brutalist Components */
+        .bw-panel {
+            background: #fff;
+            border: var(--bw-border);
+            border-radius: 24px;
+            box-shadow: var(--bw-shadow);
+        }
+
+        .bw-btn {
+            background: #000;
+            color: #fff;
+            border: var(--bw-border);
+            border-radius: 16px;
+            font-weight: 900;
+            text-transform: uppercase;
+            transition: all 0.15s ease-out;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .bw-btn:hover:not(:disabled) {
+            transform: translate(4px, 4px);
+            box-shadow: var(--bw-shadow-hover);
+            background: #222;
+        }
+        .bw-btn:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+            border-color: #666;
+            box-shadow: none;
+            transform: translate(4px, 4px);
+        }
+
+        .bw-btn-outline {
+            background: #fff;
+            color: #000;
+            border: var(--bw-border);
+            border-radius: 16px;
+            font-weight: 900;
+            text-transform: uppercase;
+            transition: all 0.15s ease-out;
+            cursor: pointer;
+        }
+        .bw-btn-outline:hover {
+            transform: translate(4px, 4px);
+            box-shadow: var(--bw-shadow-hover);
+            background: #f0f0f0;
+        }
+
+        .bw-input {
+            background: #fff;
+            border: var(--bw-border);
+            border-radius: 16px;
+            padding: 16px;
+            font-weight: 700;
+            font-size: 1.125rem;
+            outline: none;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .bw-input:focus {
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+        }
+
+        /* Canvas Styles */
+        #canvas-container {
+            position: relative;
+            overflow: hidden;
+            background: #fff;
+            border: var(--bw-border);
+            border-radius: 24px;
+            box-shadow: inset 4px 4px 10px rgba(0,0,0,0.1);
+            cursor: crosshair;
+        }
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: 0 0;
+        }
+        #draft-canvas {
+            pointer-events: none;
+        }
+
+        /* Utility classes */
+        .hidden { display: none !important; }
+        .flex-center { display: flex; align-items: center; justify-content: center; }
+        
+        /* Custom Scrollbar for tools */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; border: 2px solid #fff; }
+
+        .tool-active {
+            background: #000 !important;
+            color: #fff !important;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center p-4 md:p-8 relative">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-8 right-8 bw-panel px-6 py-4 z-50 transform transition-transform translate-x-[150%] hidden flex items-center gap-3">
+        <i data-lucide="alert-circle"></i>
+        <span id="toast-msg" class="font-bold"></span>
+    </div>
+
+    <!-- ==================== SCREEN: HOME ==================== -->
+    <div id="screen-home" class="w-full max-w-4xl grid md:grid-cols-2 gap-8 items-center h-full">
+        <div class="space-y-6">
+            <div class="bw-panel p-8 text-center bg-black text-white border-white border-[6px] shadow-[8px_8px_0px_#fff]">
+                <h1 class="text-6xl font-black italic tracking-tighter mb-2 uppercase">Flash Draw</h1>
+                <p class="font-bold text-gray-300 tracking-widest">MULTIPLAYER EDITION</p>
+            </div>
+            <div class="bw-panel p-8 space-y-4">
+                <div>
+                    <label class="block font-black text-lg mb-2 uppercase">Choose Nickname</label>
+                    <input type="text" id="player-name" class="bw-input" placeholder="e.g. Picasso" maxlength="15">
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bw-panel p-8 space-y-6">
+                <button onclick="createRoom()" class="bw-btn w-full py-5 text-xl">
+                    <i data-lucide="plus-circle"></i> Create New Room
+                </button>
+                
+                <div class="relative flex items-center py-2">
+                    <div class="flex-grow border-t-[4px] border-black"></div>
+                    <span class="flex-shrink-0 mx-4 font-black uppercase text-xl">OR</span>
+                    <div class="flex-grow border-t-[4px] border-black"></div>
+                </div>
+
+                <div class="flex gap-4">
+                    <input type="text" id="room-code-input" class="bw-input text-center uppercase tracking-widest" placeholder="CODE" maxlength="6">
+                    <button onclick="joinRoom()" class="bw-btn px-8">Join</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCREEN: LOBBY ==================== -->
+    <div id="screen-lobby" class="w-full max-w-5xl h-full flex flex-col hidden">
+        <div class="flex items-center justify-between mb-8">
+            <div class="bw-panel px-8 py-4 flex items-center gap-4 bg-black text-white">
+                <span class="font-bold text-gray-400">ROOM CODE</span>
+                <span id="lobby-code-display" class="text-4xl font-black tracking-widest text-white">------</span>
+            </div>
+            <button id="start-game-btn" onclick="startGame()" class="bw-btn px-10 py-5 text-2xl hidden">
+                <i data-lucide="play"></i> Start Match
+            </button>
+            <div id="waiting-host-msg" class="bw-panel px-8 py-5 text-xl font-bold italic">
+                Waiting for host to start...
+            </div>
+        </div>
+
+        <div class="bw-panel flex-1 p-8">
+            <h2 class="text-2xl font-black uppercase border-b-4 border-black pb-4 mb-6">Players Connected</h2>
+            <div id="players-list" class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <!-- Players dynamically injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCREEN: GAME (CANVAS) ==================== -->
+    <div id="screen-game" class="w-full h-full flex flex-col hidden max-h-screen">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-4 bw-panel px-6 py-4 flex-shrink-0">
+            <div class="flex items-center gap-4">
+                <span class="font-black uppercase text-gray-500">Theme</span>
+                <span id="game-theme" class="text-2xl font-black bg-black text-white px-4 py-1 rounded-lg">THEME</span>
+            </div>
+            <div id="timer-display" class="text-3xl font-black px-6 py-2 border-4 border-black rounded-xl">
+                10:00
+            </div>
+            <button onclick="submitDrawing()" class="bw-btn px-6 py-3">
+                <i data-lucide="check"></i> Submit Early
+            </button>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="flex flex-1 gap-4 overflow-hidden">
+            <!-- Toolbar -->
+            <aside class="bw-panel w-24 flex flex-col items-center py-6 gap-4 overflow-y-auto">
+                <!-- Tools -->
+                <button class="tool-btn bw-btn-outline p-3 rounded-xl tool-active" data-tool="pencil"><i data-lucide="pencil"></i></button>
+                <button class="tool-btn bw-btn-outline p-3 rounded-xl" data-tool="brush"><i data-lucide="brush"></i></button>
+                <button class="tool-btn bw-btn-outline p-3 rounded-xl" data-tool="eraser"><i data-lucide="eraser"></i></button>
+                <button class="tool-btn bw-btn-outline p-3 rounded-xl" data-tool="rect"><i data-lucide="square"></i></button>
+                <button class="tool-btn bw-btn-outline p-3 rounded-xl" data-tool="circle"><i data-lucide="circle"></i></button>
+                
+                <div class="w-full border-t-4 border-black my-2"></div>
+                
+                <!-- Zoom controls -->
+                <button onclick="changeZoom(0.1)" class="bw-btn-outline p-3 rounded-xl"><i data-lucide="zoom-in"></i></button>
+                <button onclick="changeZoom(-0.1)" class="bw-btn-outline p-3 rounded-xl"><i data-lucide="zoom-out"></i></button>
+                
+                <div class="w-full border-t-4 border-black my-2"></div>
+
+                <!-- Settings -->
+                <div class="w-full px-2 flex flex-col items-center">
+                    <span class="text-xs font-bold uppercase mb-1">Size</span>
+                    <input type="range" id="size-slider" min="1" max="100" value="5" class="w-full accent-black cursor-pointer">
+                </div>
+                <div class="w-full px-2 flex flex-col items-center">
+                    <span class="text-xs font-bold uppercase mb-1">Alpha</span>
+                    <input type="range" id="opacity-slider" min="1" max="100" value="100" class="w-full accent-gray-500 cursor-pointer">
+                </div>
+
+                <!-- Color Palette (Minimalist B&W + Basics) -->
+                <div class="grid grid-cols-2 gap-2 mt-4">
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #000;" data-color="#000"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #fff;" data-color="#fff"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #888;" data-color="#888"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #ff0000;" data-color="#ff0000"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #0000ff;" data-color="#0000ff"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #00ff00;" data-color="#00ff00"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black" style="background: #ffff00;" data-color="#ffff00"></button>
+                    <button class="color-btn w-6 h-6 rounded-full border-2 border-black relative overflow-hidden" onclick="document.getElementById('custom-color').click()">
+                        <i data-lucide="palette" class="w-4 h-4 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-black"></i>
+                    </button>
+                    <input type="color" id="custom-color" class="hidden">
+                </div>
+            </aside>
+
+            <!-- Canvas Area -->
+            <div id="canvas-container" class="flex-1">
+                <canvas id="main-canvas" width="1200" height="800"></canvas>
+                <canvas id="draft-canvas" width="1200" height="800"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCREEN: VOTING ==================== -->
+    <div id="screen-voting" class="w-full max-w-5xl h-full flex flex-col hidden py-4">
+        <div class="bw-panel px-8 py-4 mb-6 flex justify-between items-center bg-black text-white">
+            <span id="voting-theme" class="text-3xl font-black uppercase">THEME</span>
+            <span id="voting-counter" class="text-xl font-bold bg-white text-black px-4 py-1 rounded-lg">1 / 5</span>
+        </div>
+
+        <div class="flex-1 bw-panel flex flex-col items-center justify-center p-8 relative overflow-hidden">
+            <h2 id="artist-name" class="absolute top-8 left-8 text-2xl font-black px-6 py-2 border-4 border-black bg-white rounded-xl z-10 shadow-[4px_4px_0px_#000]">Artist Name</h2>
+            <img id="voting-image" src="" alt="Drawing" class="max-h-full max-w-full border-4 border-black shadow-[8px_8px_0px_#000] rounded-xl object-contain">
+        </div>
+
+        <div class="bw-panel mt-6 p-6 flex flex-col items-center gap-4">
+            <h3 class="text-xl font-black uppercase tracking-widest">Rate this masterpiece</h3>
+            <div id="star-container" class="flex gap-4">
+                <button class="star-btn hover:scale-125 transition-transform" data-rating="1"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+                <button class="star-btn hover:scale-125 transition-transform" data-rating="2"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+                <button class="star-btn hover:scale-125 transition-transform" data-rating="3"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+                <button class="star-btn hover:scale-125 transition-transform" data-rating="4"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+                <button class="star-btn hover:scale-125 transition-transform" data-rating="5"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+            </div>
+            <p id="vote-status" class="font-bold text-gray-500 h-6"></p>
+        </div>
+    </div>
+
+    <!-- ==================== SCREEN: RESULTS ==================== -->
+    <div id="screen-results" class="w-full max-w-4xl h-full flex flex-col hidden py-8">
+        <h1 class="text-5xl font-black text-center mb-8 uppercase bg-black text-white py-4 bw-panel">Final Podium</h1>
+        
+        <div id="podium-list" class="flex-1 overflow-y-auto space-y-4 px-4 pb-12">
+            <!-- Results injected here -->
+        </div>
+
+        <div class="flex justify-center mt-6">
+            <button id="return-lobby-btn" onclick="returnToLobby()" class="bw-btn px-12 py-5 text-2xl hidden">
+                Return to Lobby
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // ------------------ GLOBAL STATE ------------------
+        // Connect to Socket.io (Served from same domain on Render)
+        // If testing locally or specific domain, use io('http://localhost:3000') etc.
+        const socket = typeof io !== 'undefined' ? io() : { on:()=>{}, emit:()=>{}, id: 'test' };
+        
+        let currentRoom = '';
+        let amIHost = false;
+        let myId = '';
+        let gameEndTime = 0;
+        let timerInterval = null;
+
+        // Elements
+        const screens = {
+            home: document.getElementById('screen-home'),
+            lobby: document.getElementById('screen-lobby'),
+            game: document.getElementById('screen-game'),
+            voting: document.getElementById('screen-voting'),
+            results: document.getElementById('screen-results')
+        };
+
+        function showScreen(name) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[name].classList.remove('hidden');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('hidden');
+            t.classList.remove('translate-x-[150%]');
+            setTimeout(() => {
+                t.classList.add('translate-x-[150%]');
+            }, 3000);
+        }
+
+        // ------------------ SOCKET EVENTS ------------------
+        socket.on('connect', () => { myId = socket.id; });
+
+        socket.on('error_msg', (msg) => { showToast(msg); });
+
+        socket.on('room_joined', (data) => {
+            currentRoom = data.roomCode;
+            amIHost = data.isHost;
+            document.getElementById('lobby-code-display').innerText = currentRoom;
+            
+            if (amIHost) {
+                document.getElementById('start-game-btn').classList.remove('hidden');
+                document.getElementById('waiting-host-msg').classList.add('hidden');
+            } else {
+                document.getElementById('start-game-btn').classList.add('hidden');
+                document.getElementById('waiting-host-msg').classList.remove('hidden');
+            }
+            showScreen('lobby');
+        });
+
+        socket.on('update_players', (players) => {
+            const list = document.getElementById('players-list');
+            list.innerHTML = '';
+            players.forEach(p => {
+                const div = document.createElement('div');
+                div.className = "bw-panel p-4 flex flex-col items-center gap-2 relative";
+                if(p.id === socket.id) div.classList.add('bg-gray-100');
+                
+                const avatar = document.createElement('div');
+                avatar.className = "w-16 h-16 rounded-full border-4 border-black bg-white flex items-center justify-center font-black text-2xl uppercase";
+                avatar.innerText = p.name.charAt(0);
+                
+                const name = document.createElement('span');
+                name.className = "font-bold truncate w-full text-center";
+                name.innerText = p.name;
+
+                div.appendChild(avatar);
+                div.appendChild(name);
+                list.appendChild(div);
+            });
+        });
+
+        socket.on('you_are_host', () => {
+            amIHost = true;
+            document.getElementById('start-game-btn').classList.remove('hidden');
+            document.getElementById('waiting-host-msg').classList.add('hidden');
+            showToast("You are now the host!");
+        });
+
+        socket.on('game_started', (data) => {
+            document.getElementById('game-theme').innerText = data.theme;
+            gameEndTime = data.endTime;
+            initCanvas();
+            showScreen('game');
+            startTimer();
+        });
+
+        socket.on('show_drawing_vote', (data) => {
+            document.getElementById('voting-theme').innerText = document.getElementById('game-theme').innerText;
+            document.getElementById('voting-counter').innerText = `${data.index} / ${data.total}`;
+            document.getElementById('artist-name').innerText = data.artistName;
+            document.getElementById('voting-image').src = data.drawing;
+            
+            // Reset stars
+            resetStars();
+            document.getElementById('vote-status').innerText = "";
+            
+            if(data.artistId === myId) {
+                document.getElementById('vote-status').innerText = "This is your drawing!";
+                setStarsDisabled(true);
+            } else {
+                setStarsDisabled(false);
+            }
+
+            showScreen('voting');
+        });
+
+        socket.on('show_results', (players) => {
+            const list = document.getElementById('podium-list');
+            list.innerHTML = '';
+            
+            players.forEach((p, i) => {
+                const div = document.createElement('div');
+                div.className = "bw-panel p-6 flex items-center gap-6 " + (i === 0 ? "bg-black text-white" : "");
+                
+                const rank = document.createElement('div');
+                rank.className = `text-4xl font-black ${i===0 ? 'text-yellow-400' : ''}`;
+                rank.innerText = `#${i+1}`;
+
+                const name = document.createElement('div');
+                name.className = "flex-1 text-2xl font-bold truncate";
+                name.innerText = p.name;
+
+                const score = document.createElement('div');
+                score.className = "text-xl font-black flex items-center gap-2";
+                score.innerHTML = `${p.score} <i data-lucide="star" class="w-6 h-6 ${i===0 ? 'fill-yellow-400 text-yellow-400' : 'fill-black'}"></i>`;
+
+                div.appendChild(rank);
+                div.appendChild(name);
+                div.appendChild(score);
+                list.appendChild(div);
+            });
+
+            if (amIHost) {
+                document.getElementById('return-lobby-btn').classList.remove('hidden');
+            }
+            lucide.createIcons();
+            showScreen('results');
+        });
+
+        socket.on('returned_to_lobby', () => {
+            showScreen('lobby');
+        });
+
+        // ------------------ ACTIONS ------------------
+        function getName() {
+            let n = document.getElementById('player-name').value.trim();
+            if(!n) n = "Player_" + Math.floor(Math.random()*1000);
+            return n;
+        }
+
+        function createRoom() {
+            socket.emit('create_room', { name: getName() });
+        }
+
+        function joinRoom() {
+            const code = document.getElementById('room-code-input').value;
+            if (code.length === 6) {
+                socket.emit('join_room', { roomCode: code, name: getName() });
+            } else {
+                showToast("Enter a 6 digit code");
+            }
+        }
+
+        function startGame() {
+            if (amIHost) socket.emit('start_game', currentRoom);
+        }
+
+        function returnToLobby() {
+            if (amIHost) socket.emit('return_to_lobby', currentRoom);
+        }
+
+        // ------------------ TIMER ------------------
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.floor((gameEndTime - now) / 1000));
+                
+                const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+                const s = (remaining % 60).toString().padStart(2, '0');
+                document.getElementById('timer-display').innerText = `${m}:${s}`;
+
+                if (remaining === 0) {
+                    clearInterval(timerInterval);
+                    submitDrawing();
+                }
+            }, 1000);
+        }
+
+        // ------------------ CANVAS ENGINE ------------------
+        const canvas = document.getElementById('main-canvas');
+        const draft = document.getElementById('draft-canvas');
+        const ctx = canvas.getContext('2d');
+        const draftCtx = draft.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let startX = 0, startY = 0;
+        
+        let zoom = 1;
+        let activeTool = 'pencil';
+        let brushColor = '#000000';
+        let brushSize = 5;
+        let brushOpacity = 1;
+
+        function initCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            zoom = 1;
+            updateTransform();
+        }
+
+        function updateTransform() {
+            canvas.style.transform = `scale(${zoom})`;
+            draft.style.transform = `scale(${zoom})`;
+        }
+
+        function changeZoom(delta) {
+            zoom = Math.max(0.5, Math.min(zoom + delta, 3));
+            updateTransform();
+        }
+
+        function getPos(e) {
+            const rect = container.getBoundingClientRect();
+            // Handle touch or mouse
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // Adjust for container scroll and zoom
+            const x = (clientX - rect.left + container.scrollLeft) / zoom;
+            const y = (clientY - rect.top + container.scrollTop) / zoom;
+            return { x, y };
+        }
+
+        function applySettings(context) {
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.lineWidth = brushSize;
+            context.globalAlpha = brushOpacity;
+            context.strokeStyle = brushColor;
+            context.fillStyle = brushColor;
+            context.shadowBlur = 0;
+            context.shadowColor = 'transparent';
+
+            if (activeTool === 'eraser') {
+                context.globalCompositeOperation = 'destination-out';
+                context.globalAlpha = 1; // Eraser ignores opacity
+            } else {
+                context.globalCompositeOperation = 'source-over';
+            }
+
+            if (activeTool === 'brush') {
+                context.shadowBlur = brushSize;
+                context.shadowColor = brushColor;
+            }
+        }
+
+        function startDraw(e) {
+            isDrawing = true;
+            const { x, y } = getPos(e);
+            startX = x; startY = y;
+            lastX = x; lastY = y;
+
+            if (activeTool === 'pencil' || activeTool === 'brush' || activeTool === 'eraser') {
+                applySettings(ctx);
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault(); // prevent scrolling on touch
+            const { x, y } = getPos(e);
+
+            if (activeTool === 'pencil' || activeTool === 'brush' || activeTool === 'eraser') {
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                lastX = x; lastY = y;
+            } else if (activeTool === 'rect' || activeTool === 'circle') {
+                draftCtx.clearRect(0, 0, draft.width, draft.height);
+                applySettings(draftCtx);
+                draftCtx.beginPath();
+                if (activeTool === 'rect') {
+                    draftCtx.rect(startX, startY, x - startX, y - startY);
+                } else {
+                    const radius = Math.sqrt(Math.pow(x-startX,2) + Math.pow(y-startY,2));
+                    draftCtx.arc(startX, startY, radius, 0, Math.PI*2);
+                }
+                draftCtx.stroke();
+            }
+        }
+
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (activeTool === 'rect' || activeTool === 'circle') {
+                applySettings(ctx);
+                ctx.drawImage(draft, 0, 0);
+                draftCtx.clearRect(0, 0, draft.width, draft.height);
+            }
+        }
+
+        // Mouse Events
+        container.addEventListener('mousedown', startDraw);
+        container.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', endDraw);
+        
+        // Touch Events
+        container.addEventListener('touchstart', startDraw, {passive: false});
+        container.addEventListener('touchmove', draw, {passive: false});
+        window.addEventListener('touchend', endDraw);
+
+        // Tool Selection
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('tool-active'));
+                const target = e.currentTarget;
+                target.classList.add('tool-active');
+                activeTool = target.dataset.tool;
+            });
+        });
+
+        // Settings Listeners
+        document.getElementById('size-slider').addEventListener('input', (e) => { brushSize = e.target.value; });
+        document.getElementById('opacity-slider').addEventListener('input', (e) => { brushOpacity = e.target.value / 100; });
+        
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { brushColor = e.target.dataset.color; });
+        });
+        document.getElementById('custom-color').addEventListener('input', (e) => { brushColor = e.target.value; });
+
+
+        // SUBMIT
+        let hasSubmitted = false;
+        function submitDrawing() {
+            if(hasSubmitted) return;
+            hasSubmitted = true;
+            clearInterval(timerInterval);
+            
+            // Generate Image
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            socket.emit('submit_drawing', { roomCode: currentRoom, image: dataUrl });
+            
+            // Show waiting screen
+            document.getElementById('canvas-container').innerHTML = `<div class="w-full h-full flex flex-col items-center justify-center bg-gray-200 border-4 border-black rounded-2xl"><i data-lucide="check-circle" class="w-24 h-24 mb-4"></i><h2 class="text-3xl font-black uppercase">Submitted!</h2><p class="font-bold text-gray-500">Waiting for others...</p></div>`;
+            lucide.createIcons();
+        }
+
+        // ------------------ VOTING LOGIC ------------------
+        const starBtns = document.querySelectorAll('.star-btn');
+        function resetStars() {
+            starBtns.forEach(b => {
+                b.querySelector('i').classList.remove('fill-black', 'text-black');
+                b.querySelector('i').classList.add('text-gray-300');
+            });
+        }
+        function setStarsDisabled(disabled) {
+            starBtns.forEach(b => b.disabled = disabled);
+        }
+
+        starBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const rating = parseInt(e.currentTarget.dataset.rating);
+                socket.emit('submit_vote', { roomCode: currentRoom, stars: rating });
+                
+                // Visual update
+                resetStars();
+                starBtns.forEach((b, i) => {
+                    if (i < rating) {
+                        b.querySelector('i').classList.remove('text-gray-300');
+                        b.querySelector('i').classList.add('fill-black', 'text-black');
+                    }
+                });
+                setStarsDisabled(true);
+                document.getElementById('vote-status').innerText = `You rated ${rating} stars!`;
+            });
+        });
+
+    </script>
+</body>
+</html>

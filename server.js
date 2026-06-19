@@ -12,7 +12,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Game State Storage
 const rooms = {};
 
 function generateCode() {
@@ -26,7 +25,7 @@ const THEMES = [
     "Cat", "Pirate Ship", "Dragon", "Castle", "Robot", "Banana", "Wizard", "Treasure Chest", "Alien", "Astronaut",
     "Guitar", "Ninja", "Dinosaur", "Vampire", "Unicorn", "Mermaid", "Volcano", "Spaceship", "Zombie", "Ghost",
     "Pizza", "Hamburger", "Sushi", "Octopus", "Monkey", "Elephant", "Tiger", "Lion", "Penguin", "Kangaroo",
-    "Hot Air Balloon", "Submarine", "Helicopter", "Train", "Motorcycle", "Bicycle", "Rollercoaster", "Ferris Wheel"
+    "Hot Air Balloon", "Submarine", "Helicopter", "Train", "Motorcycle", "Bicycle"
 ];
 
 io.on('connection', (socket) => {
@@ -84,7 +83,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Game Loop
     socket.on('start_game', (code) => {
         const room = rooms[code];
         if(room && room.owner === socket.id) {
@@ -97,32 +95,24 @@ io.on('connection', (socket) => {
             const duration = room.settings.roundTime * 60;
             io.to(code).emit('game_started', { theme: room.theme, time: duration });
 
-            // Master Server Timer
             room.serverTimer = setTimeout(() => {
-                if (rooms[code] && rooms[code].status === 'playing') {
-                    forceSubmitRemaining(code);
-                }
-            }, duration * 1000 + 2000); // 2 second grace period
+                if (rooms[code] && rooms[code].status === 'playing') forceSubmitRemaining(code);
+            }, duration * 1000 + 2000);
         }
     });
 
-    // Handle Early Submissions and Timer Expiration
     socket.on('submit_drawing', (data) => {
         const room = rooms[data.code];
         if(room && room.status === 'playing') {
             room.drawings[socket.id] = data.image;
             if(room.players[socket.id]) room.players[socket.id].submitted = true;
-            
             io.to(data.code).emit('player_submitted', socket.id);
             checkAllSubmitted(data.code);
         }
     });
 
     function forceSubmitRemaining(code) {
-        const room = rooms[code];
-        io.to(code).emit('force_submit'); // Tell clients who haven't submitted to send their data
-        
-        // Wait 3 seconds for straggler packets, then start voting
+        io.to(code).emit('force_submit');
         setTimeout(() => {
             if(rooms[code] && rooms[code].status === 'playing') startVotingPhase(code);
         }, 3000);
@@ -140,11 +130,10 @@ io.on('connection', (socket) => {
     function startVotingPhase(code) {
         const room = rooms[code];
         room.status = 'voting';
-        // Only vote on people who actually submitted something
         room.drawingOrder = Object.keys(room.drawings);
         room.currentVoteIndex = 0;
         
-        if(room.drawingOrder.length === 0) return showResults(code); // Edge case
+        if(room.drawingOrder.length === 0) return showResults(code);
 
         room.drawingOrder.forEach(id => room.votes[id] = 0);
         sendNextVote(code);
@@ -152,16 +141,10 @@ io.on('connection', (socket) => {
 
     function sendNextVote(code) {
         const room = rooms[code];
-        if(room.currentVoteIndex >= room.drawingOrder.length) {
-            return showResults(code);
-        }
+        if(room.currentVoteIndex >= room.drawingOrder.length) return showResults(code);
 
         const currentAuthorId = room.drawingOrder[room.currentVoteIndex];
-        io.to(code).emit('start_vote', {
-            authorId: currentAuthorId,
-            image: room.drawings[currentAuthorId],
-            time: room.settings.voteTime
-        });
+        io.to(code).emit('start_vote', { authorId: currentAuthorId, image: room.drawings[currentAuthorId], time: room.settings.voteTime });
 
         room.voteTimer = setTimeout(() => {
             room.currentVoteIndex++;
@@ -171,10 +154,8 @@ io.on('connection', (socket) => {
 
     socket.on('submit_vote', (data) => {
         const room = rooms[data.code];
-        if(room && room.status === 'voting') {
-            if(data.authorId !== socket.id) {
-                room.votes[data.authorId] += data.stars;
-            }
+        if(room && room.status === 'voting' && data.authorId !== socket.id) {
+            room.votes[data.authorId] += data.stars;
         }
     });
 
@@ -188,9 +169,7 @@ io.on('connection', (socket) => {
 
         const sortedPlayers = Object.values(room.players).sort((a, b) => b.score - a.score);
         const top3 = sortedPlayers.slice(0, 3).map(p => ({
-            name: p.name,
-            score: p.score,
-            image: room.drawings[p.id] || ''
+            name: p.name, score: p.score, image: room.drawings[p.id] || ''
         }));
 
         io.to(code).emit('show_results', top3);
@@ -217,11 +196,7 @@ io.on('connection', (socket) => {
                     rooms[code].owner = Object.keys(rooms[code].players)[0];
                     io.to(code).emit('new_owner', rooms[code].owner);
                 }
-
-                // If in game, check if we should advance (a non-submitted player left)
-                if(rooms[code] && rooms[code].status === 'playing') {
-                    checkAllSubmitted(code);
-                }
+                if(rooms[code] && rooms[code].status === 'playing') checkAllSubmitted(code);
             }
         }
     });

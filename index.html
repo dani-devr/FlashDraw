@@ -3,615 +3,1049 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flash Draw!</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Flash Draw! - Multiplayer Drawing</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Socket.IO & Confetti -->
     <script src="/socket.io/socket.io.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root {
-            --bw-border: 4px solid #000;
-            --bw-shadow: 6px 6px 0px #000;
-            --bw-shadow-hover: 2px 2px 0px #000;
+            --bg: #0f111a;
+            --surface: rgba(255, 255, 255, 0.05);
+            --surface-hover: rgba(255, 255, 255, 0.1);
+            --border: rgba(255, 255, 255, 0.1);
+            --primary: #7C3AED;
+            --primary-hover: #6D28D9;
+            --accent: #F472B6;
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+            --danger: #EF4444;
+            --success: #10B981;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; user-select: none; }
+        body { background-color: var(--bg); color: var(--text); overflow: hidden; height: 100vh; width: 100vw; display: flex; flex-direction: column; }
         
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: #f0f0f0;
-            background-image: radial-gradient(#d1d1d1 2px, transparent 2px);
-            background-size: 32px 32px;
-            color: #000;
-            overflow: hidden; /* Prevent body scroll, handle inside */
-            user-select: none;
-            touch-action: none;
-        }
+        /* Glassmorphism Classes */
+        .glass { background: var(--surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+        .btn { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4); }
+        .btn.secondary { background: var(--surface); border: 1px solid var(--border); }
+        .btn.secondary:hover { background: var(--surface-hover); }
+        .btn.danger { background: var(--danger); }
+        .input { background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; padding: 12px 16px; border-radius: 12px; font-size: 1rem; outline: none; transition: border 0.2s; width: 100%; }
+        .input:focus { border-color: var(--primary); }
+        
+        /* Layouts */
+        .view { display: none; height: 100%; width: 100%; position: absolute; top: 0; left: 0; }
+        .view.active { display: flex; flex-direction: column; animation: fadeIn 0.4s ease forwards; }
 
-        /* Neo-Brutalist Components */
-        .bw-panel {
-            background: #fff;
-            border: var(--bw-border);
-            border-radius: 24px;
-            box-shadow: var(--bw-shadow);
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        
+        /* --- LOGIN & LOBBY VIEWS --- */
+        .center-container { margin: auto; max-width: 500px; width: 90%; padding: 40px; text-align: center; }
+        .logo { font-size: 3rem; font-weight: 800; background: linear-gradient(to right, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 30px; letter-spacing: -1px; }
+        .flex-col { display: flex; flex-direction: column; gap: 15px; }
+        .flex-row { display: flex; gap: 15px; }
 
-        .bw-btn {
-            background: #000;
-            color: #fff;
-            border: var(--bw-border);
-            border-radius: 16px;
-            font-weight: 900;
-            text-transform: uppercase;
-            transition: all 0.15s ease-out;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .bw-btn:hover:not(:disabled) {
-            transform: translate(4px, 4px);
-            box-shadow: var(--bw-shadow-hover);
-            background: #222;
-        }
+        /* Lobby specific */
+        .lobby-layout { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; height: 100%; padding: 20px; }
+        .panel { display: flex; flex-direction: column; padding: 20px; }
+        .panel h2 { font-size: 1.2rem; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .player-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .player-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        .player-card .status { height: 10px; width: 10px; border-radius: 50%; background: var(--danger); }
+        .player-card .status.ready { background: var(--success); }
+        .setting-group { margin-bottom: 15px; text-align: left; }
+        .setting-group label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-muted); }
+        .setting-group input[type=range] { width: 100%; accent-color: var(--primary); }
 
-        .bw-btn-icon {
-            background: #fff;
-            color: #000;
-            border: 3px solid #000;
-            border-radius: 12px;
-            padding: 8px;
-            transition: all 0.1s ease-out;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .bw-btn-icon:hover {
-            background: #f0f0f0;
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0px #000;
-        }
-        .tool-active {
-            background: #000 !important;
-            color: #fff !important;
-            box-shadow: inset 0px 4px 0px rgba(255,255,255,0.2) !important;
-            transform: translateY(2px);
-        }
+        /* Chat System */
+        .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 0.9rem; }
+        .chat-msg { padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.2); align-self: flex-start; max-width: 90%; word-wrap: break-word;}
+        .chat-msg.sys { background: none; color: var(--text-muted); font-style: italic; }
+        .chat-msg b { color: var(--accent); }
+        .chat-input { display: flex; gap: 10px; }
+        
+        /* --- DRAWING VIEW --- */
+        #view-draw { display: none; grid-template-columns: 70px 1fr 250px; grid-template-rows: 60px 1fr; height: 100vh; background: #1a1c23; }
+        #view-draw.active { display: grid; }
+        
+        .top-bar { grid-column: 1 / 4; grid-row: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; border-bottom: 1px solid var(--border); }
+        .theme-display { font-size: 1.5rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 10px rgba(244, 114, 182, 0.4); }
+        .timer { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+        
+        .toolbar-left { grid-column: 1; grid-row: 2; border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 15px 0; gap: 10px; z-index: 10; overflow-y: auto;}
+        .tool-btn { width: 45px; height: 45px; border-radius: 12px; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; }
+        .tool-btn:hover { background: var(--surface); color: white; }
+        .tool-btn.active { background: var(--primary); color: white; box-shadow: 0 0 15px rgba(124, 58, 237, 0.5); }
+        
+        .canvas-container { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; background: #2a2d38; cursor: crosshair; }
+        /* The infinite workspace wrapper */
+        #workspace { position: absolute; transform-origin: 0 0; box-shadow: 0 0 30px rgba(0,0,0,0.5); background: white; }
+        canvas { position: absolute; top: 0; left: 0; }
+        
+        .toolbar-right { grid-column: 3; grid-row: 2; border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+        
+        .properties-panel { padding: 15px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+        .prop-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        .prop-row input[type=range] { flex: 1; accent-color: var(--primary); }
+        .color-picker-wrap { display: flex; gap: 10px; align-items: center; margin-top: 5px; }
+        input[type="color"] { -webkit-appearance: none; border: none; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; background: none; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid var(--border); border-radius: 8px; }
+        .palette { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+        .swatch { width: 25px; height: 25px; border-radius: 5px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); }
+        
+        .layers-panel { flex: 1; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        .layer-item { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; }
+        .layer-item.active { border-color: var(--primary); background: rgba(124, 58, 237, 0.1); }
+        .layer-item i { color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+        .layer-item i:hover { color: white; }
 
-        .bw-input {
-            background: #fff;
-            border: var(--bw-border);
-            border-radius: 16px;
-            padding: 16px;
-            font-weight: 700;
-            font-size: 1.125rem;
-            outline: none;
-            width: 100%;
-        }
+        /* Text Tool Overlay */
+        #text-input-overlay { position: absolute; display: none; background: transparent; border: 1px dashed var(--primary); color: white; font-family: 'Poppins'; outline: none; z-index: 100; min-width: 100px; padding: 5px; }
 
-        /* Canvas Styles */
-        #canvas-area {
-            background: #cfcfcf;
-            cursor: crosshair;
-            position: relative;
-        }
-        #canvas-wrapper {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform-origin: center;
-            box-shadow: 12px 12px 0px rgba(0,0,0,1);
-            border: 4px solid #000;
-            background: #fff;
-            transition: transform 0.05s linear;
-        }
-        canvas {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-        }
-        #draft-canvas { pointer-events: none; }
+        /* Overlay text */
+        .overlay-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 5rem; font-weight: 800; background: rgba(0,0,0,0.8); z-index: 1000; opacity: 0; pointer-events: none; transition: 0.3s; }
 
-        .hidden { display: none !important; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; border: 2px solid #fff; }
+        /* --- VOTING VIEW --- */
+        .voting-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; }
+        .art-display { max-width: 80vw; max-height: 60vh; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); object-fit: contain; background: white; margin-bottom: 30px; border: 4px solid var(--surface); }
+        .stars { display: flex; gap: 15px; }
+        .star-btn { font-size: 3rem; background: transparent; border: none; color: var(--surface); cursor: pointer; transition: 0.2s; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .star-btn:hover, .star-btn.active { color: #FBBF24; transform: scale(1.2); }
+        
+        /* --- RESULTS VIEW --- */
+        .podium-container { display: flex; align-items: flex-end; justify-content: center; gap: 20px; height: 60vh; margin-top: 50px; }
+        .podium-place { display: flex; flex-direction: column; align-items: center; width: 200px; }
+        .podium-art { width: 150px; height: 150px; object-fit: cover; border-radius: 12px; border: 4px solid white; margin-bottom: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .podium-step { width: 100%; border-radius: 12px 12px 0 0; display: flex; justify-content: center; padding-top: 20px; font-size: 2rem; font-weight: 800; color: white; text-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .place-1 .podium-step { height: 250px; background: linear-gradient(to top, #FBBF24, #F59E0B); }
+        .place-2 .podium-step { height: 180px; background: linear-gradient(to top, #94A3B8, #CBD5E1); }
+        .place-3 .podium-step { height: 120px; background: linear-gradient(to top, #B45309, #D97706); }
+
+        /* Minimap */
+        #minimap-container { position: absolute; bottom: 20px; right: 20px; width: 150px; height: 100px; background: rgba(0,0,0,0.5); border: 2px solid var(--border); border-radius: 8px; z-index: 50; overflow: hidden;}
+        #minimap-canvas { width: 100%; height: 100%; }
+        #minimap-viewport { position: absolute; border: 2px solid var(--primary); box-shadow: 0 0 0 999px rgba(0,0,0,0.3); pointer-events: none; }
     </style>
 </head>
-<body class="w-screen h-screen flex flex-col relative">
+<body>
 
-    <div id="toast" class="fixed top-8 right-8 bw-panel px-6 py-4 z-50 transform transition-transform translate-x-[150%] hidden flex items-center gap-3">
-        <i data-lucide="alert-circle"></i><span id="toast-msg" class="font-bold"></span>
-    </div>
-
-    <!-- ==================== SCREEN: HOME ==================== -->
-    <div id="screen-home" class="w-full h-full flex items-center justify-center p-4">
-        <div class="max-w-4xl grid md:grid-cols-2 gap-8 items-center w-full">
-            <div class="space-y-6">
-                <div class="bw-panel p-8 text-center bg-black text-white border-white border-[6px] shadow-[8px_8px_0px_#fff]">
-                    <h1 class="text-6xl font-black italic tracking-tighter mb-2 uppercase">Flash Draw</h1>
-                    <p class="font-bold text-gray-300 tracking-widest">MULTIPLAYER EDITION</p>
+    <!-- 1. LOGIN SCREEN -->
+    <div id="view-login" class="view active">
+        <div class="glass center-container">
+            <h1 class="logo"><i class="fa-solid fa-paintbrush"></i> Flash Draw!</h1>
+            <p style="margin-bottom: 20px; color: var(--text-muted);">Enter your name to begin.</p>
+            <div class="flex-col">
+                <input type="text" id="player-name" class="input" placeholder="Nickname" maxlength="12">
+                <div class="flex-row">
+                    <button class="btn" style="flex:1" onclick="Game.createRoom()"><i class="fa-solid fa-plus"></i> Create Lobby</button>
+                    <button class="btn secondary" style="flex:1" onclick="Game.showJoin()"><i class="fa-solid fa-right-to-bracket"></i> Join Room</button>
                 </div>
-                <div class="bw-panel p-8">
-                    <label class="block font-black text-lg mb-2 uppercase">Choose Nickname</label>
-                    <input type="text" id="player-name" class="bw-input" placeholder="e.g. Picasso" maxlength="15">
-                </div>
-            </div>
-            <div class="space-y-6 bw-panel p-8">
-                <button onclick="createRoom()" class="bw-btn w-full py-5 text-xl"><i data-lucide="plus-circle"></i> Create Room</button>
-                <div class="relative flex items-center py-2">
-                    <div class="flex-grow border-t-[4px] border-black"></div>
-                    <span class="flex-shrink-0 mx-4 font-black uppercase text-xl">OR</span>
-                    <div class="flex-grow border-t-[4px] border-black"></div>
-                </div>
-                <div class="flex gap-4">
-                    <input type="text" id="room-code-input" class="bw-input text-center uppercase tracking-widest" placeholder="CODE" maxlength="6">
-                    <button onclick="joinRoom()" class="bw-btn px-8">Join</button>
+                <div id="join-section" style="display:none; margin-top: 10px;" class="flex-col">
+                    <input type="text" id="room-code-input" class="input" placeholder="6-Letter Room Code" maxlength="6" style="text-transform: uppercase;">
+                    <button class="btn" onclick="Game.joinRoom()">Join</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== SCREEN: LOBBY ==================== -->
-    <div id="screen-lobby" class="w-full h-full flex flex-col hidden p-8 max-w-5xl mx-auto">
-        <div class="flex items-center justify-between mb-8">
-            <div class="bw-panel px-8 py-4 flex items-center gap-4 bg-black text-white">
-                <span class="font-bold text-gray-400">ROOM CODE</span>
-                <span id="lobby-code-display" class="text-4xl font-black tracking-widest text-white">------</span>
+    <!-- 2. LOBBY SCREEN -->
+    <div id="view-lobby" class="view">
+        <div class="lobby-layout">
+            <!-- Left: Settings -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-gear"></i> Settings</h2>
+                <div id="lobby-settings" style="pointer-events: none; opacity: 0.7;">
+                    <div class="setting-group">
+                        <label>Round Duration (<span id="lbl-time">5</span>m)</label>
+                        <input type="range" id="set-time" min="1" max="10" value="5" onchange="Game.updateSettings()">
+                    </div>
+                    <div class="setting-group">
+                        <label>Max Players (<span id="lbl-players">8</span>)</label>
+                        <input type="range" id="set-players" min="2" max="16" value="8" onchange="Game.updateSettings()">
+                    </div>
+                    <div class="setting-group">
+                        <label>Voting Time (<span id="lbl-vote">15</span>s)</label>
+                        <input type="range" id="set-vote" min="5" max="30" value="15" onchange="Game.updateSettings()">
+                    </div>
+                </div>
+                <p id="owner-notice" style="font-size:0.8rem; color:var(--accent); margin-top:10px; display:none;">You are the room owner.</p>
             </div>
-            <button id="start-game-btn" onclick="startGame()" class="bw-btn px-10 py-5 text-2xl hidden"><i data-lucide="play"></i> Start Match</button>
-            <div id="waiting-host-msg" class="bw-panel px-8 py-5 text-xl font-bold italic">Waiting for host...</div>
-        </div>
-        <div class="bw-panel flex-1 p-8">
-            <h2 class="text-2xl font-black uppercase border-b-4 border-black pb-4 mb-6">Players</h2>
-            <div id="players-list" class="grid grid-cols-2 md:grid-cols-4 gap-6 overflow-y-auto"></div>
+
+            <!-- Middle: Players -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-users"></i> Lobby: <span id="lobby-code-display" style="color:var(--primary); letter-spacing: 2px;"></span></h2>
+                <div class="player-list" id="lobby-players"></div>
+                <button class="btn" id="btn-ready" onclick="Game.toggleReady()" style="margin-top:15px; width:100%;">Ready Up</button>
+                <button class="btn danger" id="btn-start" onclick="Game.startGame()" style="margin-top:10px; width:100%; display:none;">Start Match</button>
+            </div>
+
+            <!-- Right: Chat -->
+            <div class="glass panel">
+                <h2><i class="fa-solid fa-comments"></i> Chat</h2>
+                <div class="chat-box" id="lobby-chat"></div>
+                <div class="chat-input">
+                    <input type="text" id="lobby-chat-input" class="input" placeholder="Type here..." onkeypress="if(event.key==='Enter') Game.sendChat()">
+                    <button class="btn" onclick="Game.sendChat()"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- ==================== SCREEN: GAME (MINIMALIST CANVAS) ==================== -->
-    <div id="screen-game" class="w-full h-full flex flex-col hidden">
-        <!-- Header -->
-        <header class="absolute top-4 left-4 right-4 z-20 flex justify-between items-center pointer-events-none">
-            <div class="bw-panel px-6 py-3 flex items-center gap-4 pointer-events-auto shadow-[4px_4px_0px_#000]">
-                <span class="font-black uppercase text-gray-500 text-sm">Theme</span>
-                <span id="game-theme" class="text-xl font-black">THEME</span>
+    <!-- 3. DRAWING SCREEN -->
+    <div id="view-draw" class="view">
+        <div class="top-bar glass" style="border-radius: 0;">
+            <div class="timer" id="game-timer">05:00</div>
+            <div class="theme-display" id="game-theme">THEME</div>
+            <button class="btn secondary" onclick="DrawEngine.clearCanvas()"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        
+        <!-- Tools -->
+        <div class="toolbar-left glass" style="border-radius: 0;">
+            <button class="tool-btn active" title="Pencil (B)" onclick="DrawEngine.setTool('pencil')"><i class="fa-solid fa-pencil"></i></button>
+            <button class="tool-btn" title="Marker" onclick="DrawEngine.setTool('marker')"><i class="fa-solid fa-highlighter"></i></button>
+            <button class="tool-btn" title="Airbrush" onclick="DrawEngine.setTool('airbrush')"><i class="fa-solid fa-spray-can"></i></button>
+            <button class="tool-btn" title="Eraser (E)" onclick="DrawEngine.setTool('eraser')"><i class="fa-solid fa-eraser"></i></button>
+            <button class="tool-btn" title="Fill (G)" onclick="DrawEngine.setTool('fill')"><i class="fa-solid fa-fill-drip"></i></button>
+            <div style="height:1px; width:60%; background:var(--border); margin:10px 0;"></div>
+            <button class="tool-btn" title="Line (L)" onclick="DrawEngine.setTool('line')"><i class="fa-solid fa-minus"></i></button>
+            <button class="tool-btn" title="Rectangle (R)" onclick="DrawEngine.setTool('rect')"><i class="fa-solid fa-vector-square"></i></button>
+            <button class="tool-btn" title="Circle (C)" onclick="DrawEngine.setTool('circle')"><i class="fa-regular fa-circle"></i></button>
+            <div style="height:1px; width:60%; background:var(--border); margin:10px 0;"></div>
+            <button class="tool-btn" title="Text (T)" onclick="DrawEngine.setTool('text')"><i class="fa-solid fa-font"></i></button>
+            <button class="tool-btn" title="Select/Move" onclick="DrawEngine.setTool('select')"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+            <button class="tool-btn" title="Pan (Space)" onclick="DrawEngine.setTool('pan')"><i class="fa-solid fa-hand"></i></button>
+            <div style="flex:1;"></div>
+            <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="DrawEngine.undo()"><i class="fa-solid fa-rotate-left"></i></button>
+            <button class="tool-btn" title="Redo (Ctrl+Y)" onclick="DrawEngine.redo()"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        
+        <!-- Canvas Area -->
+        <div class="canvas-container" id="canvas-wrap">
+            <div id="workspace"></div>
+            <div id="minimap-container">
+                <canvas id="minimap-canvas"></canvas>
+                <div id="minimap-viewport"></div>
             </div>
-            <div id="timer-display" class="bw-panel px-6 py-3 text-2xl font-black bg-black text-white pointer-events-auto">05:00</div>
-            <button onclick="submitDrawing()" class="bw-btn px-6 py-3 pointer-events-auto text-sm"><i data-lucide="check"></i> Submit</button>
-        </header>
-
-        <!-- Canvas Workspace -->
-        <div id="canvas-area" class="flex-1 w-full h-full overflow-hidden flex items-center justify-center">
-            <div id="canvas-wrapper" style="width: 1200px; height: 800px; transform: translate(-50%, -50%) scale(1);">
-                <canvas id="main-canvas" width="1200" height="800"></canvas>
-                <canvas id="draft-canvas" width="1200" height="800"></canvas>
+            <!-- Dynamic text input -->
+            <input type="text" id="text-input-overlay" placeholder="Type here...">
+        </div>
+        
+        <!-- Properties & Layers -->
+        <div class="toolbar-right glass" style="border-radius: 0;">
+            <div class="properties-panel">
+                <div class="prop-row">
+                    <i class="fa-solid fa-circle" style="font-size:0.8rem"></i>
+                    <input type="range" id="brush-size" min="1" max="100" value="5" oninput="DrawEngine.updateProps()">
+                    <span id="val-size" style="width:30px; text-align:right;">5</span>
+                </div>
+                <div class="prop-row">
+                    <i class="fa-solid fa-eye-dropper" style="font-size:0.8rem"></i>
+                    <input type="range" id="brush-opacity" min="1" max="100" value="100" oninput="DrawEngine.updateProps()">
+                    <span id="val-opacity" style="width:30px; text-align:right;">100</span>
+                </div>
+                <div class="color-picker-wrap">
+                    <input type="color" id="color-picker" value="#000000" onchange="DrawEngine.updateProps()">
+                    <div style="flex:1; display:flex; gap:5px;" id="quick-colors">
+                        <div class="swatch" style="background:#000000;" onclick="DrawEngine.setColor('#000000')"></div>
+                        <div class="swatch" style="background:#FFFFFF;" onclick="DrawEngine.setColor('#FFFFFF')"></div>
+                        <div class="swatch" style="background:#EF4444;" onclick="DrawEngine.setColor('#EF4444')"></div>
+                        <div class="swatch" style="background:#3B82F6;" onclick="DrawEngine.setColor('#3B82F6')"></div>
+                        <div class="swatch" style="background:#10B981;" onclick="DrawEngine.setColor('#10B981')"></div>
+                    </div>
+                </div>
+                <div class="palette" id="color-palette">
+                    <!-- JS generated palette -->
+                </div>
+            </div>
+            
+            <div class="layers-panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="font-size:1rem;">Layers</h3>
+                    <button class="btn" style="padding:4px 8px; font-size:0.8rem;" onclick="DrawEngine.addLayer()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="layer-list" style="display:flex; flex-direction:column-reverse; gap:5px;">
+                    <!-- Layers injected here -->
+                </div>
             </div>
         </div>
+        
+        <div id="overlay-msg" class="overlay-text">TIME'S UP!</div>
+    </div>
 
-        <!-- Floating Dock / Minimalist Toolbar -->
-        <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bw-panel px-4 py-3 flex items-center gap-3 shadow-[8px_8px_0px_#000]">
-            
-            <!-- Tools -->
-            <button class="bw-btn-icon tool-active" data-tool="pencil" title="Pencil (P)"><i data-lucide="pencil" class="w-5 h-5"></i></button>
-            <button class="bw-btn-icon" data-tool="brush" title="Brush (B)"><i data-lucide="brush" class="w-5 h-5"></i></button>
-            <button class="bw-btn-icon" data-tool="eraser" title="Eraser (E)"><i data-lucide="eraser" class="w-5 h-5"></i></button>
-            <button class="bw-btn-icon" data-tool="pan" title="Pan Canvas (Space)"><i data-lucide="hand" class="w-5 h-5"></i></button>
-            
-            <div class="w-px h-8 bg-gray-300 mx-1"></div>
-            
-            <!-- Shapes -->
-            <button class="bw-btn-icon" data-tool="rect"><i data-lucide="square" class="w-5 h-5"></i></button>
-            <button class="bw-btn-icon" data-tool="circle"><i data-lucide="circle" class="w-5 h-5"></i></button>
-            
-            <div class="w-px h-8 bg-gray-300 mx-1"></div>
-
-            <!-- Settings -->
-            <div class="flex flex-col items-center w-24 px-2">
-                <span class="text-[10px] font-bold uppercase mb-1">Size</span>
-                <input type="range" id="size-slider" min="1" max="100" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer border border-black">
+    <!-- 4. VOTING SCREEN -->
+    <div id="view-vote" class="view">
+        <div class="voting-container">
+            <h2 id="vote-title" style="margin-bottom: 20px; font-size: 2rem;">Rate this drawing!</h2>
+            <img id="vote-image" class="art-display" src="">
+            <div class="stars" id="star-container">
+                <button class="star-btn" onclick="Game.submitVote(1)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(2)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(3)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(4)"><i class="fa-solid fa-star"></i></button>
+                <button class="star-btn" onclick="Game.submitVote(5)"><i class="fa-solid fa-star"></i></button>
             </div>
-
-            <div class="w-px h-8 bg-gray-300 mx-1"></div>
-
-            <!-- Colors -->
-            <div class="flex gap-2">
-                <button class="color-btn w-8 h-8 rounded-full border-2 border-black" style="background: #000;" data-color="#000"></button>
-                <button class="color-btn w-8 h-8 rounded-full border-2 border-black" style="background: #fff;" data-color="#fff"></button>
-                <button class="color-btn w-8 h-8 rounded-full border-2 border-black" style="background: #ff3b3b;" data-color="#ff3b3b"></button>
-                <button class="color-btn w-8 h-8 rounded-full border-2 border-black" style="background: #3b82f6;" data-color="#3b82f6"></button>
-                <button class="color-btn w-8 h-8 rounded-full border-2 border-black relative overflow-hidden" onclick="document.getElementById('custom-color').click()">
-                    <i data-lucide="palette" class="w-4 h-4 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-black"></i>
-                </button>
-                <input type="color" id="custom-color" class="hidden">
-            </div>
-
-            <div class="w-px h-8 bg-gray-300 mx-1"></div>
-
-            <!-- Actions -->
-            <button onclick="undo()" class="bw-btn-icon" title="Undo (Ctrl+Z)"><i data-lucide="undo" class="w-5 h-5"></i></button>
-            <button onclick="clearCanvas()" class="bw-btn-icon text-red-500" title="Clear Canvas"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
-
+            <p id="vote-wait" style="margin-top: 20px; font-size: 1.2rem; color: var(--accent); display:none;">Waiting for others...</p>
         </div>
     </div>
 
-    <!-- ==================== SCREEN: VOTING ==================== -->
-    <div id="screen-voting" class="w-full h-full flex flex-col hidden py-4 max-w-5xl mx-auto">
-        <div class="bw-panel px-8 py-4 mb-6 flex justify-between items-center bg-black text-white mx-4">
-            <span id="voting-theme" class="text-3xl font-black uppercase">THEME</span>
-            <span id="voting-counter" class="text-xl font-bold bg-white text-black px-4 py-1 rounded-lg">1 / 5</span>
-        </div>
-        <div class="flex-1 bw-panel flex flex-col items-center justify-center p-8 relative overflow-hidden mx-4">
-            <h2 id="artist-name" class="absolute top-8 left-8 text-2xl font-black px-6 py-2 border-4 border-black bg-white rounded-xl z-10 shadow-[4px_4px_0px_#000]">Artist Name</h2>
-            <img id="voting-image" src="" alt="Drawing" class="max-h-full max-w-full border-4 border-black shadow-[8px_8px_0px_#000] rounded-xl object-contain">
-        </div>
-        <div class="bw-panel mt-6 p-6 flex flex-col items-center gap-4 mx-4">
-            <h3 class="text-xl font-black uppercase tracking-widest">Rate this masterpiece</h3>
-            <div id="star-container" class="flex gap-4">
-                <button class="star-btn hover:scale-125 transition-transform" data-rating="1"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
-                <button class="star-btn hover:scale-125 transition-transform" data-rating="2"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
-                <button class="star-btn hover:scale-125 transition-transform" data-rating="3"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
-                <button class="star-btn hover:scale-125 transition-transform" data-rating="4"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
-                <button class="star-btn hover:scale-125 transition-transform" data-rating="5"><i data-lucide="star" class="w-12 h-12 text-gray-300"></i></button>
+    <!-- 5. RESULTS SCREEN -->
+    <div id="view-results" class="view">
+        <div class="voting-container">
+            <h1 class="logo" style="font-size: 4rem; margin-bottom: 0;">Winners</h1>
+            <div class="podium-container" id="podium">
+                <!-- Injected via JS -->
             </div>
-            <p id="vote-status" class="font-bold text-gray-500 h-6"></p>
-        </div>
-    </div>
-
-    <!-- ==================== SCREEN: RESULTS ==================== -->
-    <div id="screen-results" class="w-full h-full flex flex-col hidden py-8 max-w-4xl mx-auto">
-        <h1 class="text-5xl font-black text-center mb-8 uppercase bg-black text-white py-4 bw-panel mx-4">Final Podium</h1>
-        <div id="podium-list" class="flex-1 overflow-y-auto space-y-4 px-4 pb-12"></div>
-        <div class="flex justify-center mt-6">
-            <button id="return-lobby-btn" onclick="returnToLobby()" class="bw-btn px-12 py-5 text-2xl hidden">Return to Lobby</button>
+            <p style="margin-top:40px; color:var(--text-muted);">Returning to lobby...</p>
         </div>
     </div>
 
     <script>
-        lucide.createIcons();
-        const socket = typeof io !== 'undefined' ? io() : { on:()=>{}, emit:()=>{}, id: 'test' };
-        
-        let currentRoom = '';
-        let amIHost = false;
-        let myId = '';
-        let gameEndTime = 0;
-        let timerInterval = null;
-        let hasSubmitted = false;
+        const socket = io();
 
-        const screens = {
-            home: document.getElementById('screen-home'),
-            lobby: document.getElementById('screen-lobby'),
-            game: document.getElementById('screen-game'),
-            voting: document.getElementById('screen-voting'),
-            results: document.getElementById('screen-results')
+        /* =========================================
+           UI NAVIGATION & GENERAL LOGIC
+        ========================================= */
+        const UI = {
+            showView: (id) => {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById(id).classList.add('active');
+                if(id === 'view-draw') DrawEngine.resize();
+            },
+            generatePalette: () => {
+                const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#0f111a', '#475569', '#94a3b8', '#f8fafc', '#7c2d12'];
+                const container = document.getElementById('color-palette');
+                colors.forEach(c => {
+                    const el = document.createElement('div');
+                    el.className = 'swatch';
+                    el.style.backgroundColor = c;
+                    el.onclick = () => DrawEngine.setColor(c);
+                    container.appendChild(el);
+                });
+            },
+            showOverlayMsg: (text, duration) => {
+                const el = document.getElementById('overlay-msg');
+                el.innerText = text;
+                el.style.opacity = 1;
+                setTimeout(() => el.style.opacity = 0, duration);
+            }
         };
 
-        function showScreen(name) {
-            Object.values(screens).forEach(s => s.classList.add('hidden'));
-            screens[name].classList.remove('hidden');
-        }
+        /* =========================================
+           MULTIPLAYER & GAME STATE
+        ========================================= */
+        const Game = {
+            name: '',
+            code: '',
+            isOwner: false,
+            voteTargetId: null,
+            timerInterval: null,
 
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = msg;
-            t.classList.remove('hidden', 'translate-x-[150%]');
-            setTimeout(() => t.classList.add('translate-x-[150%]'), 3000);
-        }
-
-        socket.on('connect', () => { myId = socket.id; });
-        socket.on('error_msg', (msg) => showToast(msg));
-        
-        socket.on('room_joined', (data) => {
-            currentRoom = data.roomCode;
-            amIHost = data.isHost;
-            document.getElementById('lobby-code-display').innerText = currentRoom;
-            document.getElementById('start-game-btn').classList.toggle('hidden', !amIHost);
-            document.getElementById('waiting-host-msg').classList.toggle('hidden', amIHost);
-            showScreen('lobby');
-        });
-
-        socket.on('update_players', (players) => {
-            const list = document.getElementById('players-list');
-            list.innerHTML = '';
-            players.forEach(p => {
-                const div = document.createElement('div');
-                div.className = "bw-panel p-4 flex flex-col items-center gap-2 relative";
-                if(p.id === socket.id) div.classList.add('bg-gray-100');
-                div.innerHTML = `<div class="w-16 h-16 rounded-full border-4 border-black bg-white flex items-center justify-center font-black text-2xl uppercase">${p.name.charAt(0)}</div><span class="font-bold truncate w-full text-center">${p.name}</span>`;
-                list.appendChild(div);
-            });
-        });
-
-        socket.on('you_are_host', () => {
-            amIHost = true;
-            document.getElementById('start-game-btn').classList.remove('hidden');
-            document.getElementById('waiting-host-msg').classList.add('hidden');
-            showToast("You are now the host!");
-        });
-
-        socket.on('game_started', (data) => {
-            hasSubmitted = false;
-            document.getElementById('game-theme').innerText = data.theme;
-            gameEndTime = data.endTime;
-            initCanvas();
-            showScreen('game');
-            startTimer();
-        });
-
-        // ------------------ TIMER ------------------
-        function startTimer() {
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                const now = Date.now();
-                const remaining = Math.max(0, Math.floor((gameEndTime - now) / 1000));
-                const m = Math.floor(remaining / 60).toString().padStart(2, '0');
-                const s = (remaining % 60).toString().padStart(2, '0');
-                document.getElementById('timer-display').innerText = `${m}:${s}`;
-                if (remaining === 0) submitDrawing();
-            }, 1000);
-        }
-
-        // ------------------ MINIMALIST CANVAS ENGINE + UNDO + ZOOM ------------------
-        const canvasArea = document.getElementById('canvas-area');
-        const wrapper = document.getElementById('canvas-wrapper');
-        const canvas = document.getElementById('main-canvas');
-        const draft = document.getElementById('draft-canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const draftCtx = draft.getContext('2d');
-
-        let isDrawing = false;
-        let isPanning = false;
-        let lastX = 0, lastY = 0, startX = 0, startY = 0;
-        
-        let zoom = 1;
-        let panX = -50; // CSS translate uses percentages
-        let panY = -50;
-        let dragStartX = 0, dragStartY = 0;
-
-        let activeTool = 'pencil';
-        let brushColor = '#000000';
-        let brushSize = 5;
-        let undoStack = [];
-
-        function initCanvas() {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            zoom = 1; panX = -50; panY = -50;
-            undoStack = [];
-            saveState(); // Save initial blank state
-            updateTransform();
-        }
-
-        // --- UNDO SYSTEM (Ctrl+Z) ---
-        function saveState() {
-            if (undoStack.length > 20) undoStack.shift(); // Max 20 history states
-            undoStack.push(canvas.toDataURL());
-        }
-
-        function undo() {
-            if (undoStack.length > 1) {
-                undoStack.pop(); // Remove current state
-                let img = new Image();
-                img.src = undoStack[undoStack.length - 1]; // Load previous
-                img.onload = () => {
-                    ctx.clearRect(0,0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                };
-            } else if (undoStack.length === 1) {
-                clearCanvas(); // Back to white
-            }
-        }
-
-        function clearCanvas() {
-            saveState();
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-                e.preventDefault();
-                undo();
-            }
-        });
-
-        // --- ZOOM & PAN (Scroll Wheel) ---
-        function updateTransform() {
-            wrapper.style.transform = `translate(${panX}%, ${panY}%) scale(${zoom})`;
-        }
-
-        canvasArea.addEventListener('wheel', (e) => {
-            e.preventDefault(); // Prevent page scroll
-            // Scroll to Zoom. No zooming out less than 1.
-            const zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
-            zoom = Math.max(1, Math.min(zoom + zoomDelta, 5));
-            updateTransform();
-        }, { passive: false });
-
-        // --- DRAWING LOGIC ---
-        function getPos(e) {
-            const rect = wrapper.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const x = (clientX - rect.left) / zoom;
-            const y = (clientY - rect.top) / zoom;
-            return { x, y, clientX, clientY };
-        }
-
-        function applySettings(context) {
-            context.lineCap = 'round';
-            context.lineJoin = 'round';
-            context.lineWidth = brushSize;
-            context.strokeStyle = brushColor;
-            context.fillStyle = brushColor;
-            context.shadowBlur = 0;
-            context.shadowColor = 'transparent';
-            context.globalCompositeOperation = activeTool === 'eraser' ? 'destination-out' : 'source-over';
-        }
-
-        function startInteraction(e) {
-            const { x, y, clientX, clientY } = getPos(e);
+            showJoin: () => { document.getElementById('join-section').style.display = 'flex'; },
             
-            // Middle click or spacebar or Pan tool triggers panning
-            if (e.button === 1 || activeTool === 'pan') {
-                isPanning = true;
-                dragStartX = clientX;
-                dragStartY = clientY;
-                canvasArea.style.cursor = 'grabbing';
-                return;
-            }
+            createRoom: () => {
+                const name = document.getElementById('player-name').value.trim() || 'Player';
+                Game.name = name;
+                socket.emit('create_room', { name });
+            },
 
-            isDrawing = true;
-            saveState(); // Save state for Undo BEFORE drawing starts
-
-            startX = x; startY = y;
-            lastX = x; lastY = y;
-
-            if (activeTool === 'pencil' || activeTool === 'brush' || activeTool === 'eraser') {
-                applySettings(ctx);
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            }
-        }
-
-        function moveInteraction(e) {
-            if (isPanning) {
-                e.preventDefault();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                const dx = ((clientX - dragStartX) / window.innerWidth) * 100;
-                const dy = ((clientY - dragStartY) / window.innerHeight) * 100;
-                panX += dx; panY += dy;
-                dragStartX = clientX; dragStartY = clientY;
-                updateTransform();
-                return;
-            }
-
-            if (!isDrawing) return;
-            e.preventDefault();
-            const { x, y } = getPos(e);
-
-            if (activeTool === 'pencil' || activeTool === 'brush' || activeTool === 'eraser') {
-                ctx.lineTo(x, y);
-                ctx.stroke();
-                lastX = x; lastY = y;
-            } else if (activeTool === 'rect' || activeTool === 'circle') {
-                draftCtx.clearRect(0, 0, draft.width, draft.height);
-                applySettings(draftCtx);
-                draftCtx.beginPath();
-                if (activeTool === 'rect') draftCtx.rect(startX, startY, x - startX, y - startY);
-                else {
-                    const radius = Math.sqrt(Math.pow(x-startX,2) + Math.pow(y-startY,2));
-                    draftCtx.arc(startX, startY, radius, 0, Math.PI*2);
+            joinRoom: () => {
+                const name = document.getElementById('player-name').value.trim() || 'Player';
+                const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+                if(code.length === 6) {
+                    Game.name = name;
+                    socket.emit('join_room', { code, name });
                 }
-                draftCtx.stroke();
-            }
-        }
+            },
 
-        function endInteraction() {
-            if (isPanning) {
-                isPanning = false;
-                canvasArea.style.cursor = activeTool === 'pan' ? 'grab' : 'crosshair';
-                return;
-            }
-            if (!isDrawing) return;
-            isDrawing = false;
+            toggleReady: () => { socket.emit('toggle_ready', Game.code); },
             
-            if (activeTool === 'rect' || activeTool === 'circle') {
-                applySettings(ctx);
-                ctx.drawImage(draft, 0, 0);
-                draftCtx.clearRect(0, 0, draft.width, draft.height);
-            }
-        }
+            updateSettings: () => {
+                if(!Game.isOwner) return;
+                const time = document.getElementById('set-time').value;
+                const players = document.getElementById('set-players').value;
+                const vote = document.getElementById('set-vote').value;
+                document.getElementById('lbl-time').innerText = time;
+                document.getElementById('lbl-players').innerText = players;
+                document.getElementById('lbl-vote').innerText = vote;
+                socket.emit('update_settings', { code: Game.code, settings: { roundTime: time, maxPlayers: players, voteTime: vote }});
+            },
 
-        wrapper.addEventListener('mousedown', startInteraction);
-        window.addEventListener('mousemove', moveInteraction);
-        window.addEventListener('mouseup', endInteraction);
-        wrapper.addEventListener('touchstart', startInteraction, {passive: false});
-        window.addEventListener('touchmove', moveInteraction, {passive: false});
-        window.addEventListener('touchend', endInteraction);
+            sendChat: () => {
+                const input = document.getElementById('lobby-chat-input');
+                if(input.value.trim() !== '') {
+                    socket.emit('chat_msg', { code: Game.code, msg: input.value.trim() });
+                    input.value = '';
+                }
+            },
 
-        // UI Controls
-        document.querySelectorAll('[data-tool]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('tool-active'));
-                const target = e.currentTarget;
-                target.classList.add('tool-active');
-                activeTool = target.dataset.tool;
-                canvasArea.style.cursor = activeTool === 'pan' ? 'grab' : 'crosshair';
-            });
-        });
+            startGame: () => { socket.emit('start_game', Game.code); },
 
-        document.getElementById('size-slider').addEventListener('input', (e) => { brushSize = e.target.value; });
-        document.querySelectorAll('.color-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => { brushColor = e.target.dataset.color; activeTool='pencil'; document.querySelector('[data-tool="pencil"]').click(); });
-        });
-        document.getElementById('custom-color').addEventListener('input', (e) => { brushColor = e.target.value; activeTool='pencil'; document.querySelector('[data-tool="pencil"]').click(); });
-
-        // ------------------ SUBMIT & VOTING ------------------
-        function submitDrawing() {
-            if(hasSubmitted) return;
-            hasSubmitted = true;
-            clearInterval(timerInterval);
-            
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            socket.emit('submit_drawing', { roomCode: currentRoom, image: dataUrl });
-            
-            wrapper.innerHTML = `<div class="w-full h-full flex flex-col items-center justify-center bg-gray-100"><i data-lucide="check-circle" class="w-24 h-24 mb-4"></i><h2 class="text-3xl font-black uppercase">Submitted!</h2><p class="font-bold text-gray-500">Waiting for others...</p></div>`;
-            lucide.createIcons();
-        }
-
-        socket.on('show_drawing_vote', (data) => {
-            document.getElementById('voting-theme').innerText = document.getElementById('game-theme').innerText;
-            document.getElementById('voting-counter').innerText = `${data.index} / ${data.total}`;
-            document.getElementById('artist-name').innerText = data.artistName;
-            document.getElementById('voting-image').src = data.drawing;
-            
-            const starBtns = document.querySelectorAll('.star-btn');
-            starBtns.forEach(b => {
-                b.querySelector('i').classList.remove('fill-black', 'text-black');
-                b.querySelector('i').classList.add('text-gray-300');
-                b.disabled = (data.artistId === myId);
-            });
-            document.getElementById('vote-status').innerText = data.artistId === myId ? "This is your drawing!" : "";
-            showScreen('voting');
-        });
-
-        document.querySelectorAll('.star-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const rating = parseInt(e.currentTarget.dataset.rating);
-                socket.emit('submit_vote', { roomCode: currentRoom, stars: rating });
-                
-                document.querySelectorAll('.star-btn').forEach((b, i) => {
-                    if (i < rating) {
-                        b.querySelector('i').classList.remove('text-gray-300');
-                        b.querySelector('i').classList.add('fill-black', 'text-black');
-                    }
-                    b.disabled = true;
+            submitVote: (stars) => {
+                if(!Game.voteTargetId) return;
+                socket.emit('submit_vote', { code: Game.code, authorId: Game.voteTargetId, stars });
+                document.querySelectorAll('.star-btn').forEach((btn, i) => {
+                    if(i < stars) btn.style.color = '#FBBF24';
+                    else btn.style.color = 'var(--surface)';
+                    btn.style.pointerEvents = 'none';
                 });
-                document.getElementById('vote-status').innerText = `You rated ${rating} stars!`;
-            });
+                document.getElementById('vote-wait').style.display = 'block';
+            }
+        };
+
+        // --- Socket Listeners ---
+        socket.on('error_msg', msg => alert(msg));
+        
+        socket.on('room_joined', data => {
+            Game.code = data.code;
+            Game.isOwner = data.isOwner;
+            document.getElementById('lobby-code-display').innerText = data.code;
+            UI.showView('view-lobby');
+            
+            if(Game.isOwner) {
+                document.getElementById('lobby-settings').style.pointerEvents = 'auto';
+                document.getElementById('lobby-settings').style.opacity = 1;
+                document.getElementById('owner-notice').style.display = 'block';
+                document.getElementById('btn-start').style.display = 'block';
+                document.getElementById('btn-ready').style.display = 'none';
+            }
         });
 
-        socket.on('show_results', (players) => {
-            const list = document.getElementById('podium-list');
+        socket.on('update_players', players => {
+            const list = document.getElementById('lobby-players');
             list.innerHTML = '';
-            players.forEach((p, i) => {
-                const div = document.createElement('div');
-                div.className = "bw-panel p-6 flex items-center gap-6 " + (i === 0 ? "bg-black text-white" : "");
-                div.innerHTML = `<div class="text-4xl font-black ${i===0 ? 'text-yellow-400' : ''}">#${i+1}</div><div class="flex-1 text-2xl font-bold truncate">${p.name}</div><div class="text-xl font-black flex items-center gap-2">${p.score} <i data-lucide="star" class="w-6 h-6 ${i===0 ? 'fill-yellow-400 text-yellow-400' : 'fill-black'}"></i></div>`;
-                list.appendChild(div);
+            let allReady = true;
+            players.forEach(p => {
+                if(!p.ready) allReady = false;
+                list.innerHTML += `
+                    <div class="player-card">
+                        <span>${p.name} ${p.id === socket.id ? '(You)' : ''}</span>
+                        <div class="status ${p.ready ? 'ready' : ''}"></div>
+                    </div>`;
             });
-            document.getElementById('return-lobby-btn').classList.toggle('hidden', !amIHost);
-            lucide.createIcons();
-            showScreen('results');
+            if(Game.isOwner && players.length > 1) {
+                document.getElementById('btn-start').disabled = !allReady;
+            }
         });
 
-        function returnToLobby() {
-            if (amIHost) socket.emit('return_to_lobby', currentRoom);
-        }
-        socket.on('returned_to_lobby', () => showScreen('lobby'));
+        socket.on('chat_msg', data => {
+            const box = document.getElementById('lobby-chat');
+            const el = document.createElement('div');
+            el.className = `chat-msg ${data.sys ? 'sys' : ''}`;
+            el.innerHTML = data.sys ? data.text : `<b>${data.sender}:</b> ${data.text}`;
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        });
 
+        socket.on('settings_updated', settings => {
+            if(!Game.isOwner) {
+                document.getElementById('set-time').value = settings.roundTime;
+                document.getElementById('set-players').value = settings.maxPlayers;
+                document.getElementById('set-vote').value = settings.voteTime;
+                document.getElementById('lbl-time').innerText = settings.roundTime;
+                document.getElementById('lbl-players').innerText = settings.maxPlayers;
+                document.getElementById('lbl-vote').innerText = settings.voteTime;
+            }
+        });
+
+        socket.on('game_started', data => {
+            UI.showView('view-draw');
+            document.getElementById('game-theme').innerText = data.theme;
+            DrawEngine.init();
+            UI.showOverlayMsg('START DRAWING!', 2000);
+            
+            let timeLeft = data.time;
+            Game.timerInterval = setInterval(() => {
+                timeLeft--;
+                const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const s = (timeLeft % 60).toString().padStart(2, '0');
+                document.getElementById('game-timer').innerText = `${m}:${s}`;
+                
+                if(timeLeft <= 0) {
+                    clearInterval(Game.timerInterval);
+                    UI.showOverlayMsg('TIME IS UP!', 3000);
+                    // Extract image
+                    setTimeout(() => {
+                        const finalImg = DrawEngine.getFinalImage();
+                        socket.emit('submit_drawing', { code: Game.code, image: finalImg });
+                    }, 2000);
+                }
+            }, 1000);
+        });
+
+        socket.on('start_vote', data => {
+            UI.showView('view-vote');
+            Game.voteTargetId = data.authorId;
+            document.getElementById('vote-image').src = data.image;
+            document.getElementById('vote-wait').style.display = 'none';
+            
+            const title = document.getElementById('vote-title');
+            if(data.authorId === socket.id) {
+                title.innerText = "Your Masterpiece!";
+                document.getElementById('star-container').style.display = 'none';
+            } else {
+                title.innerText = "Rate this drawing!";
+                document.getElementById('star-container').style.display = 'flex';
+                document.querySelectorAll('.star-btn').forEach(btn => {
+                    btn.style.color = 'var(--surface)';
+                    btn.style.pointerEvents = 'auto';
+                });
+            }
+        });
+
+        socket.on('show_results', top3 => {
+            UI.showView('view-results');
+            const p = document.getElementById('podium');
+            p.innerHTML = '';
+            
+            const places = [
+                { class: 'place-2', title: '2nd', data: top3[1] },
+                { class: 'place-1', title: '1st', data: top3[0] },
+                { class: 'place-3', title: '3rd', data: top3[2] }
+            ];
+
+            places.forEach(pos => {
+                if(pos.data) {
+                    p.innerHTML += `
+                    <div class="podium-place ${pos.class}">
+                        <div style="text-align:center; margin-bottom:10px;">
+                            <h3 style="color:var(--accent)">${pos.data.name}</h3>
+                            <p>${pos.data.score} ⭐</p>
+                        </div>
+                        <img class="podium-art" src="${pos.data.image}">
+                        <div class="podium-step">${pos.title}</div>
+                    </div>`;
+                }
+            });
+
+            // Fire Confetti
+            const duration = 10000;
+            const end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#7C3AED', '#F472B6', '#FBBF24'] });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#7C3AED', '#F472B6', '#FBBF24'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        });
+
+        socket.on('return_to_lobby', () => {
+            UI.showView('view-lobby');
+            document.querySelectorAll('.status').forEach(el => el.classList.remove('ready'));
+            if(Game.isOwner) document.getElementById('btn-start').disabled = true;
+        });
+
+
+        /* =========================================
+           HIGH PERFORMANCE DRAWING ENGINE
+        ========================================= */
+        const DrawEngine = {
+            width: 1920, // Virtual canvas size
+            height: 1080,
+            layers: [],
+            activeLayer: 0,
+            history: [],
+            redoStack: [],
+            
+            // State
+            tool: 'pencil',
+            color: '#000000',
+            size: 5,
+            opacity: 1,
+            
+            // Viewport
+            scale: 1,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
+            
+            // Input state
+            isDrawing: false,
+            points: [],
+            lastRenderPoint: null,
+            startX: 0, startY: 0,
+            
+            // DOM
+            workspace: document.getElementById('workspace'),
+            wrap: document.getElementById('canvas-wrap'),
+            minimap: document.getElementById('minimap-canvas'),
+            miniCtx: document.getElementById('minimap-canvas').getContext('2d'),
+            viewport: document.getElementById('minimap-viewport'),
+
+            init: function() {
+                this.workspace.innerHTML = '';
+                this.layers = [];
+                this.history = [];
+                this.redoStack = [];
+                this.workspace.style.width = this.width + 'px';
+                this.workspace.style.height = this.height + 'px';
+                
+                // Add default white background layer
+                this.addLayer("Background", true);
+                this.fillCanvas('#ffffff');
+                
+                // Add drawing layer
+                this.addLayer("Layer 1");
+
+                // Center canvas
+                const rect = this.wrap.getBoundingClientRect();
+                this.scale = Math.min(rect.width / this.width, rect.height / this.height) * 0.9;
+                this.panX = (rect.width - (this.width * this.scale)) / 2;
+                this.panY = (rect.height - (this.height * this.scale)) / 2;
+                this.updateTransform();
+
+                this.setupEvents();
+                this.updateLayerUI();
+                this.saveState();
+            },
+
+            addLayer: function(name = `Layer ${this.layers.length}`, noTransparent = false) {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.width;
+                canvas.height = this.height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                this.workspace.appendChild(canvas);
+                
+                this.layers.push({ name, canvas, ctx, visible: true, locked: false });
+                this.activeLayer = this.layers.length - 1;
+                this.updateLayerUI();
+            },
+
+            updateLayerUI: function() {
+                const list = document.getElementById('layer-list');
+                list.innerHTML = '';
+                this.layers.forEach((l, i) => {
+                    const el = document.createElement('div');
+                    el.className = `layer-item ${i === this.activeLayer ? 'active' : ''}`;
+                    el.onclick = () => { this.activeLayer = i; this.updateLayerUI(); };
+                    el.innerHTML = `
+                        <span>${l.name}</span>
+                        <div style="display:flex; gap:10px;">
+                            <i class="fa-solid fa-eye${l.visible ? '' : '-slash'}" onclick="event.stopPropagation(); DrawEngine.toggleLayerVisibility(${i})"></i>
+                        </div>
+                    `;
+                    list.appendChild(el);
+                });
+                this.updateMinimap();
+            },
+
+            toggleLayerVisibility: function(i) {
+                this.layers[i].visible = !this.layers[i].visible;
+                this.layers[i].canvas.style.display = this.layers[i].visible ? 'block' : 'none';
+                this.updateLayerUI();
+            },
+
+            updateTransform: function() {
+                this.workspace.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+                
+                // Update Minimap viewport
+                const mw = this.minimap.width;
+                const mh = this.minimap.height;
+                const rect = this.wrap.getBoundingClientRect();
+                
+                const viewW = (rect.width / this.scale) * (mw / this.width);
+                const viewH = (rect.height / this.scale) * (mh / this.height);
+                const viewX = (-this.panX / this.scale) * (mw / this.width);
+                const viewY = (-this.panY / this.scale) * (mh / this.height);
+
+                this.viewport.style.width = `${viewW}px`;
+                this.viewport.style.height = `${viewH}px`;
+                this.viewport.style.left = `${viewX}px`;
+                this.viewport.style.top = `${viewY}px`;
+            },
+
+            updateMinimap: function() {
+                this.minimap.width = 150;
+                this.minimap.height = 150 * (this.height / this.width);
+                this.miniCtx.clearRect(0,0, this.minimap.width, this.minimap.height);
+                this.layers.forEach(l => {
+                    if(l.visible) {
+                        this.miniCtx.drawImage(l.canvas, 0, 0, this.minimap.width, this.minimap.height);
+                    }
+                });
+            },
+
+            // Coordinate Mapping
+            getMousePos: function(e) {
+                const rect = this.workspace.getBoundingClientRect();
+                return {
+                    x: (e.clientX - rect.left) / this.scale,
+                    y: (e.clientY - rect.top) / this.scale
+                };
+            },
+
+            setupEvents: function() {
+                // Prevent duplicate listener bindings
+                this.wrap.onpointerdown = this.handlePointerDown.bind(this);
+                window.onpointermove = this.handlePointerMove.bind(this);
+                window.onpointerup = this.handlePointerUp.bind(this);
+                
+                this.wrap.onwheel = (e) => {
+                    e.preventDefault();
+                    const zoomSensitivity = 0.001;
+                    const delta = -e.deltaY * zoomSensitivity;
+                    const oldScale = this.scale;
+                    this.scale = Math.min(Math.max(0.1, this.scale + delta), 5);
+                    
+                    // Zoom to mouse
+                    const rect = this.wrap.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    
+                    this.panX = mouseX - (mouseX - this.panX) * (this.scale / oldScale);
+                    this.panY = mouseY - (mouseY - this.panY) * (this.scale / oldScale);
+                    
+                    this.updateTransform();
+                };
+
+                // Keyboard Shortcuts
+                window.onkeydown = (e) => {
+                    if(e.target.tagName === 'INPUT') return;
+                    if(e.code === 'Space') { this.isPanning = true; this.wrap.style.cursor = 'grab'; }
+                    if(e.ctrlKey && e.code === 'KeyZ') this.undo();
+                    if(e.ctrlKey && e.code === 'KeyY') this.redo();
+                    if(e.code === 'KeyB') this.setTool('pencil');
+                    if(e.code === 'KeyE') this.setTool('eraser');
+                    if(e.code === 'KeyG') this.setTool('fill');
+                };
+                window.onkeyup = (e) => {
+                    if(e.code === 'Space') { this.isPanning = false; this.wrap.style.cursor = 'crosshair'; }
+                };
+            },
+
+            // Core Drawing Logic
+            handlePointerDown: function(e) {
+                if(e.button === 1 || this.isPanning || this.tool === 'pan') {
+                    this.isPanning = true;
+                    this.startX = e.clientX - this.panX;
+                    this.startY = e.clientY - this.panY;
+                    this.wrap.style.cursor = 'grabbing';
+                    return;
+                }
+
+                if(this.tool === 'text') return this.handleTextTool(e);
+
+                this.isDrawing = true;
+                const pos = this.getMousePos(e);
+                this.startX = pos.x;
+                this.startY = pos.y;
+                this.points = [pos];
+                this.lastRenderPoint = pos;
+
+                const layer = this.layers[this.activeLayer];
+                if(layer.locked || !layer.visible) return;
+
+                const ctx = layer.ctx;
+                ctx.globalAlpha = this.opacity;
+                ctx.lineWidth = this.size;
+                ctx.strokeStyle = this.color;
+                ctx.fillStyle = this.color;
+
+                // Tool specific setup
+                if(this.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.strokeStyle = 'rgba(0,0,0,1)';
+                } else if(this.tool === 'marker') {
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.globalAlpha = this.opacity * 0.5;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+
+                if(this.tool === 'fill') {
+                    this.floodFill(Math.floor(pos.x), Math.floor(pos.y));
+                    this.isDrawing = false;
+                    this.saveState();
+                } else if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Save canvas state for shape preview
+                    this.previewData = ctx.getImageData(0,0, this.width, this.height);
+                } else {
+                    // Start drawing path
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, this.size/2, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                }
+            },
+
+            handlePointerMove: function(e) {
+                if(this.isPanning) {
+                    this.panX = e.clientX - this.startX;
+                    this.panY = e.clientY - this.startY;
+                    this.updateTransform();
+                    return;
+                }
+                
+                if(!this.isDrawing) return;
+
+                const pos = this.getMousePos(e);
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
+
+                if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Shape previews
+                    ctx.putImageData(this.previewData, 0, 0);
+                    ctx.beginPath();
+                    if(this.tool === 'rect') {
+                        ctx.rect(this.startX, this.startY, pos.x - this.startX, pos.y - this.startY);
+                    } else if(this.tool === 'circle') {
+                        const r = Math.sqrt(Math.pow(pos.x - this.startX, 2) + Math.pow(pos.y - this.startY, 2));
+                        ctx.arc(this.startX, this.startY, r, 0, Math.PI*2);
+                    } else if(this.tool === 'line') {
+                        ctx.moveTo(this.startX, this.startY);
+                        ctx.lineTo(pos.x, pos.y);
+                    }
+                    ctx.stroke();
+                } else {
+                    // Smooth Freehand Drawing (Quadratic Curve Interpolation)
+                    this.points.push(pos);
+                    
+                    // Airbrush effect
+                    if(this.tool === 'airbrush') {
+                        for(let i=0; i<10; i++) {
+                            const offsetX = (Math.random() - 0.5) * this.size * 2;
+                            const offsetY = (Math.random() - 0.5) * this.size * 2;
+                            if(offsetX*offsetX + offsetY*offsetY < this.size*this.size) {
+                                ctx.globalAlpha = this.opacity * 0.1;
+                                ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 1, 1);
+                            }
+                        }
+                        return;
+                    }
+
+                    if(this.points.length >= 3) {
+                        const lastTwo = this.points.slice(-2);
+                        const control = lastTwo[0];
+                        const end = {
+                            x: (lastTwo[0].x + lastTwo[1].x) / 2,
+                            y: (lastTwo[0].y + lastTwo[1].y) / 2
+                        };
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(this.lastRenderPoint.x, this.lastRenderPoint.y);
+                        ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
+                        ctx.stroke();
+                        
+                        this.lastRenderPoint = end;
+                    }
+                }
+            },
+
+            handlePointerUp: function(e) {
+                if(this.isPanning && e.button !== 1 && this.tool !== 'pan') this.isPanning = false;
+                if(!this.isDrawing) return;
+                this.isDrawing = false;
+                
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
+                
+                if(['rect', 'circle', 'line'].includes(this.tool)) {
+                    // Finalize shape
+                    ctx.stroke();
+                } else if(!['airbrush'].includes(this.tool) && this.points.length > 0) {
+                    // Finish final segment
+                    ctx.beginPath();
+                    ctx.moveTo(this.lastRenderPoint.x, this.lastRenderPoint.y);
+                    ctx.lineTo(this.points[this.points.length-1].x, this.points[this.points.length-1].y);
+                    ctx.stroke();
+                }
+
+                ctx.globalCompositeOperation = 'source-over'; // Reset
+                this.updateMinimap();
+                this.saveState();
+            },
+
+            handleTextTool: function(e) {
+                const pos = this.getMousePos(e);
+                const input = document.getElementById('text-input-overlay');
+                input.style.display = 'block';
+                input.style.left = e.clientX + 'px';
+                input.style.top = e.clientY + 'px';
+                input.style.fontSize = (this.size * this.scale) + 'px';
+                input.style.color = this.color;
+                input.value = '';
+                input.focus();
+
+                input.onblur = () => {
+                    if(input.value.trim() !== '') {
+                        const ctx = this.layers[this.activeLayer].ctx;
+                        ctx.font = `${this.size}px Poppins`;
+                        ctx.fillStyle = this.color;
+                        ctx.globalAlpha = this.opacity;
+                        ctx.fillText(input.value, pos.x, pos.y + this.size);
+                        this.saveState();
+                        this.updateMinimap();
+                    }
+                    input.style.display = 'none';
+                };
+                input.onkeydown = (ev) => { if(ev.key === 'Enter') input.blur(); };
+            },
+
+            // State Management
+            saveState: function() {
+                const state = [];
+                this.layers.forEach(l => {
+                    state.push(l.ctx.getImageData(0,0,this.width,this.height));
+                });
+                this.history.push(state);
+                if(this.history.length > 20) this.history.shift(); // Limit undo size
+                this.redoStack = [];
+            },
+
+            undo: function() {
+                if(this.history.length > 1) {
+                    this.redoStack.push(this.history.pop());
+                    const state = this.history[this.history.length - 1];
+                    state.forEach((imgData, i) => {
+                        this.layers[i].ctx.putImageData(imgData, 0, 0);
+                    });
+                    this.updateMinimap();
+                }
+            },
+
+            redo: function() {
+                if(this.redoStack.length > 0) {
+                    const state = this.redoStack.pop();
+                    state.forEach((imgData, i) => {
+                        this.layers[i].ctx.putImageData(imgData, 0, 0);
+                    });
+                    this.history.push(state);
+                    this.updateMinimap();
+                }
+            },
+
+            // Flood Fill Algorithm
+            floodFill: function(startX, startY) {
+                const layer = this.layers[this.activeLayer];
+                const ctx = layer.ctx;
+                const w = this.width, h = this.height;
+                const imgData = ctx.getImageData(0,0,w,h);
+                const data = imgData.data;
+
+                const getPixelIndex = (x,y) => (y * w + x) * 4;
+                const startIdx = getPixelIndex(startX, startY);
+                const startR = data[startIdx], startG = data[startIdx+1], startB = data[startIdx+2], startA = data[startIdx+3];
+
+                // Convert hex color to rgb
+                const hex = this.color.replace('#','');
+                const fillR = parseInt(hex.substring(0,2), 16);
+                const fillG = parseInt(hex.substring(2,4), 16);
+                const fillB = parseInt(hex.substring(4,6), 16);
+
+                if(startR === fillR && startG === fillG && startB === fillB && startA === 255) return;
+
+                const matchStartColor = (idx) => {
+                    return data[idx] === startR && data[idx+1] === startG && data[idx+2] === startB && data[idx+3] === startA;
+                };
+
+                const setPixel = (idx) => {
+                    data[idx] = fillR; data[idx+1] = fillG; data[idx+2] = fillB; data[idx+3] = 255;
+                };
+
+                const pixelStack = [[startX, startY]];
+                while(pixelStack.length > 0) {
+                    let newPos = pixelStack.pop();
+                    let x = newPos[0], y = newPos[1];
+                    let idx = getPixelIndex(x, y);
+                    
+                    while(y-- >= 0 && matchStartColor(idx)) idx -= w*4;
+                    idx += w*4; ++y;
+                    
+                    let reachLeft = false, reachRight = false;
+                    while(y++ < h-1 && matchStartColor(idx)) {
+                        setPixel(idx);
+                        if(x > 0) {
+                            if(matchStartColor(idx - 4)) {
+                                if(!reachLeft) { pixelStack.push([x-1, y]); reachLeft = true; }
+                            } else if(reachLeft) reachLeft = false;
+                        }
+                        if(x < w-1) {
+                            if(matchStartColor(idx + 4)) {
+                                if(!reachRight) { pixelStack.push([x+1, y]); reachRight = true; }
+                            } else if(reachRight) reachRight = false;
+                        }
+                        idx += w*4;
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            },
+
+            // UI Callbacks
+            setTool: function(t) {
+                this.tool = t;
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                event.currentTarget.classList.add('active');
+                this.wrap.style.cursor = t === 'pan' ? 'grab' : (t === 'text' ? 'text' : 'crosshair');
+            },
+            
+            setColor: function(c) {
+                this.color = c;
+                document.getElementById('color-picker').value = c;
+            },
+            
+            updateProps: function() {
+                this.size = parseInt(document.getElementById('brush-size').value);
+                this.opacity = parseInt(document.getElementById('brush-opacity').value) / 100;
+                this.color = document.getElementById('color-picker').value;
+                document.getElementById('val-size').innerText = this.size;
+                document.getElementById('val-opacity').innerText = Math.round(this.opacity*100);
+            },
+
+            clearCanvas: function() {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.clearRect(0,0,this.width,this.height);
+                if(this.activeLayer === 0) this.fillCanvas('#ffffff');
+                this.saveState();
+                this.updateMinimap();
+            },
+
+            fillCanvas: function(color) {
+                const ctx = this.layers[this.activeLayer].ctx;
+                ctx.fillStyle = color;
+                ctx.fillRect(0,0,this.width,this.height);
+            },
+
+            resize: function() {
+                if(this.workspace) this.updateTransform();
+            },
+
+            getFinalImage: function() {
+                // Composite all visible layers
+                const comp = document.createElement('canvas');
+                comp.width = this.width; comp.height = this.height;
+                const ctx = comp.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0,0,this.width,this.height);
+                
+                this.layers.forEach(l => {
+                    if(l.visible) ctx.drawImage(l.canvas, 0, 0);
+                });
+                
+                // Downscale for network transmission (saving bandwidth)
+                const out = document.createElement('canvas');
+                out.width = 1280; out.height = 720;
+                const outCtx = out.getContext('2d');
+                outCtx.drawImage(comp, 0, 0, 1280, 720);
+                
+                return out.toDataURL('image/jpeg', 0.85);
+            }
+        };
+
+        // Window Resizing handler
+        window.addEventListener('resize', () => DrawEngine.resize());
+
+        // Initialize UI components
+        UI.generatePalette();
+        
     </script>
 </body>
 </html>

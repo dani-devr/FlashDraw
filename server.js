@@ -80,20 +80,20 @@ io.on('connection', (socket) => {
     if (room && room.host === socket.id) {
       room.status = 'drawing';
       room.theme = THEMES[Math.floor(Math.random() * THEMES.length)];
-      // 10 minutes = 600 seconds
-      room.endTime = Date.now() + (600 * 1000); 
+      // 5 minutes = 300 seconds
+      room.endTime = Date.now() + (300 * 1000); 
 
       // Reset previous game state if restarting
       room.players.forEach(p => p.drawing = null);
       
       io.to(roomCode).emit('game_started', { theme: room.theme, endTime: room.endTime });
 
-      // Automatically end drawing phase after 10 mins if not triggered manually
-      setTimeout(() => {
+      // Automatically end drawing phase after 5 mins if not triggered manually
+      room.gameTimer = setTimeout(() => {
         if (rooms[roomCode] && rooms[roomCode].status === 'drawing') {
           startVotingPhase(roomCode);
         }
-      }, 600 * 1000);
+      }, 300 * 1000);
     }
   });
 
@@ -109,6 +109,7 @@ io.on('connection', (socket) => {
       // Check if all players have submitted
       const allSubmitted = room.players.every(p => p.drawing !== null);
       if (allSubmitted) {
+        clearTimeout(room.gameTimer); // Fix: clear the timer so it moves immediately
         startVotingPhase(data.roomCode);
       }
     }
